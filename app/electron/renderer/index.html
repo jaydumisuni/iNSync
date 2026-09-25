@@ -31,21 +31,21 @@ button,select,input{font:inherit}
 .tag.blue{color:#c9efff;border-color:rgba(89,204,255,.25);background:rgba(89,204,255,.08)}.empty-state{padding:14px;border-radius:14px;border:1px dashed rgba(88,180,255,.14);background:rgba(0,0,0,.12);color:#9db4d2;font-size:11px;text-align:center}.share-path{margin-top:9px;padding:8px 10px;border-radius:12px;border:1px dashed rgba(88,180,255,.16);background:rgba(0,0,0,.16);color:#cfe4f7;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.muted-file{color:#7f9ab7}.queue-card{padding:11px;border-radius:15px;border:1px solid rgba(88,180,255,.1);background:rgba(255,255,255,.025)}.queue-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.queue-head b{font-size:12px}.queue-head small{display:block;color:#9db4d2;margin-top:3px;font-size:10px}.queue-pct{text-align:right;margin-top:5px;font-size:9px;color:#a9c9e8}.pager{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:8px;font-size:9px;color:#a9c9e8}.pager button{padding:5px 8px}
 
 #toast{position:fixed;left:50%;bottom:12px;z-index:80;transform:translate(-50%,16px);opacity:0;padding:7px 10px;border-radius:999px;background:rgba(9,17,31,.9);border:1px solid rgba(82,189,255,.2);color:#e9f8ff;font-size:9px;transition:.16s;-webkit-app-region:no-drag}#toast.show{opacity:1;transform:translate(-50%,0)}
-</style>
+.peer-actions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.peer-btn{padding:5px 7px;font-size:9px;border-radius:9px}.sectiontabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px}.sectiontab{border:1px solid rgba(88,180,255,.12);background:rgba(255,255,255,.035);color:#bcd5ec;border-radius:10px;padding:7px 5px;font-size:9px;font-weight:700;cursor:pointer}.sectiontab.active{color:#00101b;background:linear-gradient(90deg,#23dfff,#5667ff)}.media-list{display:grid;gap:7px}.media-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 9px;border-radius:13px;border:1px solid rgba(88,180,255,.1);background:rgba(255,255,255,.025)}.media-row b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.media-row span{display:block;color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}.media-actions{display:flex;gap:5px}.mini{padding:5px 7px!important;font-size:9px!important;border-radius:9px!important}</style>
 </head>
 <body>
 <div id="stage">
   <img id="art" src="assets/insync-ui-disconnected.png" alt="">
   <img class="logo" src="assets/insync-logo-transparent.png" alt="iNSync">
-  <button id="minBtn" class="window-btn" aria-label="Minimize">−</button>
-  <button id="closeBtn" class="window-btn" aria-label="Close">×</button>
+  <button id="minBtn" class="window-btn" aria-label="Minimize">&minus;</button>
+  <button id="closeBtn" class="window-btn" aria-label="Close">&times;</button>
   <button class="hotspot hs-wifi" data-module="sharing" data-label="Sharing"></button>
   <button class="hotspot hs-ps" data-module="playstation" data-label="PlayStation"></button>
   <button class="hotspot hs-xbox" data-module="xbox" data-label="Xbox"></button>
   <button class="hotspot hs-switch" data-module="switch" data-label="Switch"></button>
-  <button class="hotspot hs-iphone" data-module="iphone" data-label="iPhone / IPA"></button>
-  <button class="hotspot hs-ipa" data-module="iphone" data-label="IPA"></button>
-  <button class="hotspot hs-android" data-module="android" data-label="Android / APK"></button>
+  <button class="hotspot hs-iphone" data-module="iphone" data-label="iPhone"></button>
+  <button class="hotspot hs-ipa" data-module="ipa" data-label="IPA"></button>
+  <button class="hotspot hs-android" data-module="android" data-label="Android"></button>
   <button class="hotspot hs-folder" data-module="files" data-label="File Share"></button>
   <button class="hotspot hs-clipboard" data-module="clipboard" data-label="Clipboard"></button>
   <button class="hotspot hs-pc" data-module="pc" data-label="PC Share"></button>
@@ -56,7 +56,7 @@ button,select,input{font:inherit}
   <section id="modal" class="modal">
     <header class="modal-head">
       <div id="modalTitle" class="modal-title"></div>
-      <div class="modal-actions"><button id="maxModal" aria-label="Maximize">▢</button><button id="closeModal" class="x" aria-label="Close">×</button></div>
+      <div class="modal-actions"><button id="maxModal" aria-label="Maximize">Max</button><button id="closeModal" class="x" aria-label="Close">&times;</button></div>
     </header>
     <div id="modalBody" class="modal-body"></div>
     <div id="jobDock" class="jobdock">
@@ -77,6 +77,29 @@ const jobs=new Map();
 const recentJobs=[];
 const artByState={disconnected:"assets/insync-ui-disconnected.png",receiving:"assets/insync-ui-receiving.png",sending:"assets/insync-ui-sending.png"};
 const data={
+  sharing:{status:null},
+  pc:{peers:[],role:"idle",scope:"internet-only",sharedPaths:[],sources:[],destination:""},
+  files:{sources:[],destination:""},
+  clipboard:{peers:[],targets:[],types:{text:true,image:true,files:false},direction:"two-way"},
+  android:{devices:[],serial:"",packagePaths:[],apps:[],page:0,info:null},
+  ipa:{path:"",validation:null,status:null},
+  iphone:{status:null,section:"photos",media:{photos:[],music:[]},apps:[],documents:[],bundleId:"",page:0},
+  playstation:{paths:[],status:null},
+  xbox:{paths:[],status:null},
+  switch:{paths:[],status:null}
+};
+
+const modules={
+  home:{
+    title:"iNSync",sub:"Share - Transfer - Install - Sync. One transport core, multiple devices.",icon:"home",
+    render(){
+      const c=engineSnapshot?.capabilities||{};
+      return [
+        '<div class="card"><h3>Transport core</h3><p>Long-running work is queued in the iNSync engine, not the renderer.</p><div class="rows">'+row("Engine","Queued worker execution",engineSnapshot?.engine?.workers?engineSnapshot.engine.workers+" workers":"Ready","green")+row("File transport","Local, mapped and UNC copy with progress/cancel",c.file_copy?"Ready":"Unavailable",c.file_copy?"green":"red")+row("Android","ADB package and app operations",c.adb?"Ready":"ADB missing",c.adb?"green":"red")+row("iPhone","Photos, apps and Documents through the Apple device bridge",c.ios_bridge?"Ready":"Bridge missing",c.ios_bridge?"green":"red")+row("Clipboard peers","Approved peer text/image transport",c.clipboard_peer?"Ready":"Unavailable",c.clipboard_peer?"green":"red")+'</div><div class="buttonbar"><button class="secondary" data-cmd="engineRefresh">Refresh engine</button></div></div>',
+        '<div class="card"><h3>Connection law</h3><div class="rows">'+row("Green","Provider / sending","Active","green")+row("Blue","Receiver / receiving","Active","blue")+row("Red","Disconnected / inactive","Off","red")+'</div><p style="margin-top:10px">Every popup is one view into the same engine. Device-specific adapters stay capability-gated when a backend is unavailable.</p></div>'
+      ];
+    }
+  },
   sharing:{
     title:"Sharing",sub:"Flip this PC between Internet sharing and normal networking.",icon:"sharing",
     render(){
@@ -92,7 +115,7 @@ const data={
     render(){
       const me=localPeer();
       if(me){data.pc.role=me.role||data.pc.role;data.pc.scope=me.scope||data.pc.scope;data.pc.sharedPaths=me.shared_paths||data.pc.sharedPaths}
-      const peerRows=data.pc.peers.length?data.pc.peers.slice(0,6).map(peer=>'<div class="row"><div><b>'+esc(peer.name||peer.host||peer.id)+'</b><small>'+esc((peer.self?"This PC · ":"")+(peer.ip||"local")+" · "+(peer.scope||"idle"))+'</small></div>'+peerTag(peer)+'</div>').join(''):'<div class="empty-state">No iNSync peers found yet.</div>';
+      const peerRows=data.pc.peers.length?data.pc.peers.slice(0,6).map(peer=>peerRowHtml(peer)).join(''):'<div class="empty-state">No iNSync peers found yet.</div>';
       return [
         '<div class="card"><h3>PCs on the network</h3><div class="rows">'+peerRows+'</div><div class="grid2" style="margin-top:10px"><div class="control"><label>This PC role</label><select id="pcRole"><option value="provider" '+(data.pc.role==="provider"?"selected":"")+'>Provider</option><option value="receiver" '+(data.pc.role==="receiver"?"selected":"")+'>Receiver</option><option value="idle" '+(data.pc.role==="idle"?"selected":"")+'>Idle</option></select></div><div class="control"><label>Share scope</label><select id="pcScope"><option value="internet-only" '+(data.pc.scope==="internet-only"?"selected":"")+'>Internet only</option><option value="internet-folders" '+(data.pc.scope==="internet-folders"?"selected":"")+'>Internet + selected folders</option><option value="selected-location" '+(data.pc.scope==="selected-location"?"selected":"")+'>Selected folder/location</option><option value="whole-pc" '+(data.pc.scope==="whole-pc"?"selected":"")+'>Whole PC (explicit)</option></select></div></div><div class="share-path">'+esc(data.pc.sharedPaths.join(" · ")||"No shared folder selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="pcChooseFolder">Choose location</button><button class="primary" data-cmd="pcApply">Apply</button><button class="secondary" data-cmd="peerRefresh">Refresh peers</button></div></div>',
         '<div class="card"><h3>Color law</h3><div class="rows">'+row("Green","Providing Internet / data","Provider","green")+row("Blue","Receiving Internet / data","Receiver","blue")+row("Red","Inactive / not sharing","Off","red")+'</div><h3 style="margin-top:14px">Trust</h3><p>Discovery is automatic. Only approved iNSync endpoints become eligible for transfer and clipboard actions.</p></div>'
@@ -122,25 +145,50 @@ const data={
     }
   },
   android:{
-    title:"Android / ADB",sub:"ADB connection, APK installation and installed-app management in one Android surface.",icon:"android",
+    title:"Android",sub:"ADB connection, Android package installation and installed-app management.",icon:"android",
     render(){
       const d=data.android,info=d.info?.device||{},storage=d.info?.storage||{};
       const perPage=4,maxPage=Math.max(0,Math.ceil(d.apps.length/perPage)-1);d.page=Math.min(d.page,maxPage);
       const pageApps=d.apps.slice(d.page*perPage,d.page*perPage+perPage);
       const appRows=pageApps.length?pageApps.map(app=>'<div class="app-row"><div><b>'+esc(app.package)+'</b><span>'+esc(app.kind||"app")+'</span></div><button class="danger" data-cmd="'+(app.action==="disable"?"appDisable":"appUninstall")+'" data-package="'+esc(app.package)+'">'+(app.action==="disable"?"Disable":"Uninstall")+'</button></div>').join(''):'<div class="empty-state">Refresh Apps to list packages.</div>';
       return [
-        '<div class="card"><div class="grid2">'+actionTile("apk","Install APK","APK, APKS/XAPK or split set.")+actionTile("android","ADB device","USB / TCP ADB status.")+'</div><div class="control"><label>ADB device</label><select id="adbDevice"><option value="">Auto / first device</option>'+optionList(d.devices,x=>x.serial,x=>x.serial+" · "+x.state,d.serial)+'</select></div><div class="share-path">'+esc(d.packagePaths.length?d.packagePaths.map(x=>x.split(/[\\/]/).pop()).join(" · "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose APK / package</button><button class="primary" data-cmd="apkInstall">Install</button><button class="secondary" data-cmd="adbRefresh">Refresh ADB</button></div><h3 style="margin-top:14px">Apps on device</h3><div class="app-list">'+appRows+'</div><div class="pager"><button class="secondary" data-cmd="appsPrev">‹</button><span>Page '+(d.page+1)+' / '+(maxPage+1)+'</span><button class="secondary" data-cmd="appsNext">›</button><button class="secondary" data-cmd="appsRefresh">Refresh Apps</button></div></div>',
-        '<div class="card"><h3>Device</h3><div class="rows">'+row("ADB",d.devices.length?(d.serial||d.devices[0].serial):"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",(info.manufacturer||"")+" "+(info.model||""),info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+row("App safety","User apps uninstall; system apps disable-user","Guarded","green")+'</div></div>'
+        '<div class="card"><div class="control"><label>ADB device</label><select id="adbDevice"><option value="">Auto / first device</option>'+optionList(d.devices,x=>x.serial,x=>x.serial+" | "+x.state,d.serial)+'</select></div><div class="share-path">'+esc(d.packagePaths.length?d.packagePaths.map(x=>x.split(/[\\/]/).pop()).join(" | "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose package</button><button class="primary" data-cmd="apkInstall">Install</button><button class="secondary" data-cmd="adbRefresh">Refresh ADB</button></div><h3 style="margin-top:14px">Apps on device</h3><div class="app-list">'+appRows+'</div><div class="pager"><button class="secondary" data-cmd="appsPrev">&lt;</button><span>Page '+(d.page+1)+' / '+(maxPage+1)+'</span><button class="secondary" data-cmd="appsNext">&gt;</button><button class="secondary" data-cmd="appsRefresh">Refresh Apps</button></div></div>',
+        '<div class="card"><h3>Device</h3><div class="rows">'+row("ADB",d.devices.length?(d.serial||d.devices[0].serial):"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",((info.manufacturer||"")+" "+(info.model||"")).trim()||"Refresh device",info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+row("Package install","APK / APKS / XAPK / split APK","Ready",d.devices.length?"green":"")+row("App safety","User apps uninstall; system apps disable-user","Guarded","green")+'</div></div>'
+      ];
+    }
+  },
+  ipa:{
+    title:"IPA",sub:"Validate an IPA, inspect signing metadata and install it through the Apple device bridge.",icon:"ipa",
+    render(){
+      const v=data.ipa.validation?.metadata||{},status=data.ipa.status||{},device=status.device||{},storage=status.storage||{};
+      return [
+        '<div class="card"><div class="control"><label>Choose IPA</label><div class="share-path">'+esc(data.ipa.path?data.ipa.path.split(/[\\/]/).pop():"No IPA selected")+'</div></div><div class="buttonbar"><button class="secondary" data-cmd="ipaBrowse">Choose IPA</button><button class="primary" data-cmd="ipaValidateInstall">Validate / Install</button><button class="secondary" data-cmd="ipaStatus">Refresh iPhone</button></div>'+(v.bundle_id?'<div class="rows">'+row(v.name||"IPA",v.bundle_id,v.version||"Version ?",v.signed?"green":"")+'</div>':'')+'</div>',
+        '<div class="card"><h3>Capability</h3><div class="rows">'+row("Signing",v.bundle_id?(v.signed?"Code signature present":"Signing/provisioning required"):"Validate IPA first",v.bundle_id?(v.signed?"Detected":"Check"):"Check",v.signed?"green":"")+row("Device",device.name||device.product_type||"Refresh device",device.ios_version?"iOS "+device.ios_version:(status.devices?.length?"Connected":"Unknown"),status.devices?.length?"green":"")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" available":"Unknown",storage.total?fmtBytes(storage.total):"Refresh","")+'</div></div>'
       ];
     }
   },
   iphone:{
-    title:"iPhone / IPA",sub:"IPA sideload and iPhone transfer actions in one iOS surface.",icon:"iphone",
+    title:"iPhone",sub:"Photos, music export, installed apps and app Documents in one Apple-device surface.",icon:"iphone",
     render(){
-      const v=data.iphone.validation?.metadata||{},status=data.iphone.status||{},device=status.device||{},storage=status.storage||{};
+      const d=data.iphone,status=d.status||{},device=status.device||{},storage=status.storage||{},section=d.section||"photos";
+      const labels={photos:"Photos",music:"Music",apps:"Apps",documents:"App Documents"};
+      const tabs=["photos","music","apps","documents"].map(x=>'<button class="sectiontab '+(section===x?"active":"")+'" data-cmd="iphoneSection" data-section="'+x+'">'+labels[x]+'</button>').join("");
+      let body="",actions="";
+      if(section==="apps"){
+        body=d.apps.length?d.apps.slice(0,6).map(app=>'<div class="media-row"><div><b>'+esc(app.name||app.bundle_id)+'</b><span>'+esc(app.bundle_id)+(app.size?" | "+fmtBytes(app.size):"")+'</span></div><div class="media-actions"><button class="secondary mini" data-cmd="iphoneDocuments" data-bundle="'+esc(app.bundle_id)+'">Documents</button><button class="danger mini" data-cmd="iphoneAppDelete" data-bundle="'+esc(app.bundle_id)+'">Delete</button></div></div>').join(""):'<div class="empty-state">Refresh Apps to list installed user apps.</div>';
+        actions='<button class="secondary" data-cmd="iphoneAppsRefresh">Refresh Apps</button>';
+      }else if(section==="documents"){
+        const appOptions=d.apps.map(app=>'<option value="'+esc(app.bundle_id)+'" '+(app.bundle_id===d.bundleId?"selected":"")+'>'+esc(app.name||app.bundle_id)+'</option>').join("");
+        body='<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="media-list">'+(d.documents.length?d.documents.slice(0,7).map(item=>iphoneFileRow(item,true)).join(""):'<div class="empty-state">Choose an app, then refresh its Documents.</div>')+'</div>';
+        actions='<button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send file</button>';
+      }else{
+        const list=d.media[section]||[];
+        body='<div class="media-list">'+(list.length?list.slice(0,7).map(item=>iphoneFileRow(item,section==="photos")).join(""):'<div class="empty-state">Refresh '+section+' to list device content.</div>')+'</div>';
+        actions='<button class="secondary" data-cmd="iphoneMediaRefresh" data-kind="'+section+'">Refresh</button>';
+      }
       return [
-        '<div class="card"><div class="grid2">'+actionTile("ipa","IPA Sideload","Validate, sign/provision if required, then install.")+actionTile("iphone","iPhone","USB device status and storage.")+'</div><div class="control"><label>Choose IPA</label><div class="share-path">'+esc(data.iphone.ipa?data.iphone.ipa.split(/[\\/]/).pop():"No IPA selected")+'</div></div><div class="buttonbar"><button class="secondary" data-cmd="ipaBrowse">Choose IPA</button><button class="primary" data-cmd="ipaValidateInstall">Validate / Install</button><button class="secondary" data-cmd="iosStatus">Refresh device</button></div>'+(v.bundle_id?'<div class="rows">'+row(v.name||"IPA",v.bundle_id,v.version||"Version ?",v.signed?"green":"")+'</div>':'')+'</div>',
-        '<div class="card"><h3>Capability gate</h3><div class="rows">'+row("Signing",v.bundle_id?(v.signed?"Code signature present":"Signing/provisioning required"):"Validate IPA first",v.bundle_id?(v.signed?"Detected":"Check"):"Check",v.signed?"green":"")+row("Device",device.name||device.product_type||"Refresh device",device.ios_version?"iOS "+device.ios_version:(status.devices?.length?"Connected":"Unknown"),status.devices?.length?"green":"")+row("Clipboard","Only supported iOS clipboard paths are exposed","Honest","green")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" available":"Unknown",storage.total?fmtBytes(storage.total):"Refresh","")+'</div></div>'
+        '<div class="card"><div class="sectiontabs">'+tabs+'</div>'+body+'<div class="buttonbar">'+actions+'</div></div>',
+        '<div class="card"><h3>Device</h3><div class="rows">'+row("Connection",device.name||device.product_type||"No iPhone",status.devices?.length?"Connected":"Disconnected",status.devices?.length?"green":"red")+row("iOS",device.product_type||"Unknown",device.ios_version||"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Unknown",storage.total?fmtBytes(storage.total):"Refresh","")+row("Photos","List / send to PC / delete","Ready",engineSnapshot?.capabilities?.ios_bridge?"green":"")+row("Music","List / send to PC; library-safe delete gated","Export","")+row("Apps","List / delete user apps","Ready",engineSnapshot?.capabilities?.ios_bridge?"green":"")+row("App Documents","List / send / save / delete","Ready",engineSnapshot?.capabilities?.ios_bridge?"green":"")+'</div><div class="buttonbar"><button class="secondary" data-cmd="iosStatus">Refresh device</button></div></div>'
       ];
     }
   },
@@ -159,87 +207,27 @@ function row(title,sub,value,kind=""){return '<div class="row"><div><b>'+esc(tit
 function actionTile(icon,title,sub){return '<div class="action"><div class="mini-art icon-'+icon+'"></div><div><b>'+esc(title)+'</b><span>'+esc(sub)+'</span></div></div>'}
 function moduleIcon(key){return '<div class="module-art icon-'+key+'"></div>'}
 function selectedPaths(paths,empty="Nothing selected"){if(!paths?.length)return '<div class="file muted-file">'+esc(empty)+'</div>';return paths.slice(0,5).map(x=>'<div class="file">'+esc(x.split(/[\\/]/).pop()||x)+'</div>').join('')}
+function iphoneFileRow(item,allowDelete){
+  const name=item.name||String(item.path||"").split("/").pop()||item.path||"item";
+  const meta=(item.size!==undefined?fmtBytes(item.size):"")+(item.path?" | "+item.path:"");
+  return '<div class="media-row"><div><b>'+esc(name)+'</b><span>'+esc(meta)+'</span></div><div class="media-actions"><button class="secondary mini" data-cmd="iphoneFileSave" data-kind="'+esc(item.kind||data.iphone.section)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Send to PC</button>'+(allowDelete?'<button class="danger mini" data-cmd="iphoneFileDelete" data-kind="'+esc(item.kind||data.iphone.section)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Delete</button>':'')+'</div></div>';
+}
 function optionList(items,valueFn,labelFn,selected){return items.map(x=>{const v=valueFn(x),l=labelFn(x);return '<option value="'+esc(v)+'" '+(v===selected?'selected':'')+'>'+esc(l)+'</option>'}).join('')}
 function peerTag(peer){const role=(peer.role||"idle").toLowerCase();if(role==="provider")return tag("Provider","green");if(role==="receiver")return tag("Receiver","blue");return tag(peer.approved===false?"Unapproved":"Idle","red")}
+function peerRowHtml(peer){
+  const detail=(peer.self?"This PC | ":"")+(peer.ip||"local")+" | "+(peer.scope||"idle");
+  let controls=peerTag(peer);
+  if(!peer.self){
+    controls='<div class="peer-actions">'+controls+'<button class="secondary peer-btn" data-cmd="peerApprove" data-peer-id="'+esc(peer.id)+'" data-approved="'+(peer.approved?"false":"true")+'">'+(peer.approved?"Block":"Approve")+'</button></div>';
+  }
+  return '<div class="row"><div><b>'+esc(peer.name||peer.host||peer.id)+'</b><small>'+esc(detail)+'</small></div>'+controls+'</div>';
+}
 function roleColor(role){return role==="provider"?"sending":role==="receiver"?"receiving":"disconnected"}
 function localPeer(){return data.pc.peers.find(x=>x.self)||null}
 function queueJobFor(context){for(const item of recentJobs){if(item.context===context)return item.job}return null}
 function jobCard(job){const pct=Math.round(job.progress||0);return '<div class="queue-card"><div class="queue-head"><div><b>'+esc(job.operation||"Job")+'</b><small>'+esc(job.message||job.status||"")+'</small></div>'+tag(job.status||"queued",job.status==="completed"?"green":job.status==="failed"?"red":"")+'</div><div class="progress"><i style="width:'+pct+'%"></i></div><div class="queue-pct">'+pct+'%</div></div>'}
 
-const modules={
-  home:{
-    title:"iNSync",sub:"Share · Transfer · Install · Sync — one transport core, multiple devices.",icon:"home",
-    render(){
-      const c=engineSnapshot?.capabilities||{};
-      return [
-        '<div class="card"><h3>Transport core</h3><p>Every long operation runs in the iNSync engine, not the renderer.</p><div class="rows">'+row("Engine","Queued worker execution",engineSnapshot?.engine?.workers?engineSnapshot.engine.workers+" workers":"Ready","green")+row("File transport","Local, mapped and UNC copy with progress/cancel",c.file_copy?"Ready":"Unavailable",c.file_copy?"green":"red")+row("ADB / Android","Device discovery and package/app operations",c.adb?"Ready":"ADB missing",c.adb?"green":"red")+row("Peer discovery","Find other iNSync instances on the LAN",c.peer_discovery?"Ready":"Unavailable",c.peer_discovery?"green":"red")+'</div><div class="buttonbar"><button class="secondary" data-cmd="engineRefresh">Refresh engine</button></div></div>',
-        '<div class="card"><h3>Capability law</h3><div class="rows">'+row("Green","Provider / sending","Active","green")+row("Blue","Receiver / receiving","Active","blue")+row("Red","Disconnected / inactive","Off","red")+'</div><p style="margin-top:10px">Each popup is a view into the same engine. No separate mini-tool is embedded inside iNSync.</p></div>'
-      ];
-    }
-  },
-  sharing:{
-    title:"Sharing",sub:"Normal networking ↔ Internet sharing. Runs in the engine; Windows approval only when a mutation needs elevation.",
-    render(){
-      const s=data.sharing.status||{};
-      const on=state.connection==="sending";
-      return [
-        '<div class="card"><h3>Internet Sharing</h3>'+rows([
-          ["State",s.message||"Read current state",""+(on?"Sharing":"Off"),on?"green":"red"],
-          ["Private side",s.ethernetIPv4||"Ethernet",""+(s.ethernetStatus||"Unknown"),""],
-          ["Uplink",s.wifiIPv4||"Wi-Fi",s.wifiGateway?"Gateway "+s.wifiGateway:"Auto",""]
-        ])+'<div class="split2"><div class="field"><label>Internet source</label><select id="sharePublic"><option>Wi-Fi</option><option>Ethernet</option></select></div><div class="field"><label>Share to</label><select id="sharePrivate"><option>Ethernet</option><option>Wi-Fi</option></select></div></div><div class="buttons"><button class="secondary" data-cmd="sharingRefresh">Refresh</button><button class="primary" data-cmd="sharingToggle">'+(on?"Back to normal":"Start sharing")+'</button></div></div>',
-        '<div class="card"><h3>Contract</h3><p>iNSync captures the private-side baseline, clears stale ICS flags, applies the private gateway, verifies the public/private pair, and restores the saved baseline when sharing is disabled.</p></div>'
-      ]
-    }
-  },
-  pc:{
-    title:"PC Share",sub:"Use local, mapped or UNC destinations now; approved iNSync peer discovery plugs into the same engine contract.",
-    render(){
-      return [
-        '<div class="card"><h3>Send / Receive</h3>'+pathBox("Source",data.pc.sources.join(" • ")) + pathBox("Destination",data.pc.destination) + '<div class="buttons"><button class="secondary" data-cmd="pcFiles">Choose files</button><button class="secondary" data-cmd="pcFolder">Choose source folder</button><button class="secondary" data-cmd="pcDestination">Choose destination</button><button class="primary" data-cmd="pcTransfer">Transfer</button></div></div>',
-        '<div class="card"><h3>Approved peers</h3>'+shortList(data.pc.peers.map(x=>x.name||x.host||x.id))+'<div class="buttons"><button class="secondary" data-cmd="peerRefresh">Refresh peers</button></div><p style="margin-top:7px">Until pairing is qualified, mapped drives and UNC paths remain usable without pretending an unapproved LAN device is trusted.</p></div>'
-      ]
-    }
-  },
-  files:{
-    title:"File Share",sub:"Explorer selection in the UI; copy/receive work and progress run in the engine.",
-    render(){return [
-      '<div class="card"><h3>Explorer</h3>'+pathBox("Source",data.files.sources.join(" • "))+pathBox("Destination",data.files.destination)+'<div class="buttons"><button class="secondary" data-cmd="filesChoose">Choose files</button><button class="secondary" data-cmd="filesChooseFolder">Choose folder</button><button class="secondary" data-cmd="filesDestination">Destination</button><button class="primary" data-cmd="filesTransfer">Start transfer</button></div></div>',
-      '<div class="card"><h3>Selected</h3>'+shortList(data.files.sources)+'<p style="margin-top:7px">The engine scans the copy plan, streams progress, supports cancellation, and works with normal folders, mapped drives and UNC paths.</p></div>'
-    ]}
-  },
-  clipboard:{
-    title:"Clipboard",sub:"Text and images are selected in Electron, but peer delivery is an engine job.",
-    render(){return [
-      '<div class="card"><h3>Clipboard Send</h3>'+rows([
-        ["Text","Read the current clipboard and send to selected approved peers.","Ready","green"],
-        ["Image","Read the current clipboard image and send selectively.","Ready","blue"]
-      ])+'<div class="buttons"><button class="primary" data-cmd="clipText">Paste text</button><button class="secondary" data-cmd="clipImage">Send image</button></div></div>',
-      '<div class="card"><h3>Targets</h3>'+shortList(data.clipboard.peers.map(x=>x.name||x.host||x.id))+'<div class="buttons"><button class="secondary" data-cmd="clipPeers">Refresh peers</button></div><p style="margin-top:7px">No unknown LAN device is treated as approved. Pairing/approval is the next transport adapter boundary.</p></div>'
-    ]}
-  },
-  android:{
-    title:"Android / ADB",sub:"Device discovery, APK install and app management all run in the engine.",
-    render(){
-      const devices=data.android.devices;
-      const apps=data.android.apps;
-      return [
-        '<div class="card"><h3>Android Device</h3><div class="field"><label>ADB device</label><select id="adbDevice"><option value="">Auto / first device</option>'+optionList(devices,x=>x.serial,x=>x.serial+" · "+x.state,data.android.serial)+'</select></div>'+pathBox("APK",data.android.apk)+'<div class="buttons"><button class="secondary" data-cmd="adbRefresh">Refresh devices</button><button class="secondary" data-cmd="apkBrowse">Choose APK</button><button class="primary" data-cmd="apkInstall">Install APK</button></div></div>',
-        '<div class="card"><h3>Applications</h3><div class="field"><label>User app</label><select id="adbApp"><option value="">Choose app</option>'+apps.map(a=>'<option value="'+esc(a)+'" '+(a===data.android.app?'selected':'')+'>'+esc(a)+'</option>').join('')+'</select></div><div class="buttons"><button class="secondary" data-cmd="appsRefresh">List apps</button><button class="danger" data-cmd="appUninstall">Uninstall</button></div><p style="margin-top:7px">System-app destructive actions are not exposed by this screen.</p></div>'
-      ]
-    }
-  },
-  iphone:{
-    title:"iPhone / IPA",sub:"Uses libimobiledevice/ideviceinstaller when present; otherwise the capability stays gated.",
-    render(){return [
-      '<div class="card"><h3>iPhone</h3>'+pathBox("IPA",data.iphone.ipa)+'<div class="buttons"><button class="secondary" data-cmd="iosStatus">Device status</button><button class="secondary" data-cmd="ipaBrowse">Choose IPA</button><button class="primary" data-cmd="ipaInstall">Install IPA</button></div></div>',
-      '<div class="card"><h3>Capability</h3><p>Signing, provisioning and device-service requirements are checked by the backend. Unsupported states are reported instead of using a fake universal install path.</p></div>'
-    ]}
-  },
-  playstation:{title:"PlayStation / PKG",sub:"Package selection and queue UI are live; the console-specific install adapter remains capability-gated.",render(){return consoleRender("playstation","PlayStation",["pkg"])}},
-  xbox:{title:"Xbox",sub:"Shared storage/transfer workflow; backend actions stay console-specific.",render(){return consoleRender("xbox","Xbox",["appx","msix","zip"])}},
-  switch:{title:"Nintendo Switch",sub:"Shared storage/transfer workflow; backend actions stay console-specific.",render(){return consoleRender("switch","Nintendo Switch",["nsp","xci","zip"])}}
-};
+
 
 function consoleRender(key,label,extensions){
   const d=data[key],q=queueJobFor(key),status=d.status||{};
@@ -261,7 +249,9 @@ function openModule(key){
   if(key==="sharing")submit("sharing.status",{},"sharing",true);
   if(key==="android")submit("adb.devices",{},"android",true);
   if(key==="pc"||key==="clipboard")submit("peer.list",{},key,true);
-  if(key==="iphone")submit("ios.status",{},"iphone",true);
+  if(key==="iphone"){submit("ios.status",{},"iphone",true);submit("ios.apps",{},"iphone",true);submit("ios.media.list",{kind:"photos"},"iphone",true)}
+  if(key==="ipa")submit("ios.status",{},"ipa",true);
+  if(["playstation","xbox","switch"].includes(key))submit("console.status",{console:key},key,true);
 }
 function setJob(job){
   activeJob=job?.id||"";
@@ -289,13 +279,20 @@ function handleFinished(job){
   if(job.status==="completed")toast(r.message||job.message||"Completed");else if(job.status==="cancelled")toast("Cancelled");else toast(r.message||job.error||job.message||"Failed");
   if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){data.sharing.status=r.status||r;const x=r.status||r;if(x.connection)apply({connection:x.connection})}
   if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[]}
+  if(job.operation==="peer.approve")submit("peer.list",{},currentModule,true);
   if(job.operation==="peer.configure"&&r.peer){data.pc.role=r.peer.role||data.pc.role;data.pc.scope=r.peer.scope||data.pc.scope;data.pc.sharedPaths=r.peer.shared_paths||data.pc.sharedPaths;const c=roleColor(data.pc.role);apply({connection:c});window.ttg.stateSet({connection:c});submit("peer.list",{},null,true)}
   if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial)submit("adb.info",{serial:data.android.serial},"android",true)}
   if(job.operation==="adb.info")data.android.info=r;
   if(job.operation==="adb.apps"){data.android.apps=r.apps||[];data.android.page=0}
   if(job.operation==="adb.uninstall"||job.operation==="adb.disable")submit("adb.apps",{serial:data.android.serial},"android",true);
-  if(job.operation==="ios.status")data.iphone.status=r;
-  if(job.operation==="ios.validate"){data.iphone.validation=r;if(r.ok&&meta.context==="validate-install")submit("ios.ipa",{path:data.iphone.ipa},"iphone",false)}
+  if(job.operation==="ios.status"){if(meta.context==="ipa")data.ipa.status=r;else data.iphone.status=r}
+  if(job.operation==="ios.validate"){data.ipa.validation=r;if(r.ok&&meta.context==="validate-install")submit("ios.ipa",{path:data.ipa.path},"ipa",false)}
+  if(job.operation==="ios.apps")data.iphone.apps=r.apps||[];
+  if(job.operation==="ios.media.list"&&r.kind)data.iphone.media[r.kind]=r.items||[];
+  if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id}
+  if(job.operation==="ios.app.uninstall")submit("ios.apps",{},"iphone",true);
+  if(job.operation==="ios.media.delete"&&r.kind)submit("ios.media.list",{kind:r.kind},"iphone",true);
+  if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if(job.operation==="console.pkg"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if($("#backdrop").classList.contains("open"))renderModule();
@@ -305,10 +302,12 @@ window.ttg.onBackendEvent(evt=>{
   if((evt.type==="job.progress"||evt.type==="job.queued")&&job){updateRemembered(job);if(job.id===activeJob)setJob(job);if($("#backdrop").classList.contains("open"))renderModule()}
   if(evt.type==="job.finished"&&job)handleFinished(job);
   if(evt.type==="sharing.state"&&evt.connection)apply({connection:evt.connection});
+  if(evt.type==="peer.clipboard")toast("Clipboard received from "+(evt.sender_name||evt.sender_ip||"peer"));
 });
 
 function wireControls(){
   const adbDevice=$("#adbDevice");if(adbDevice)adbDevice.onchange=e=>{data.android.serial=e.target.value;if(data.android.serial)submit("adb.info",{serial:data.android.serial},"android",true)};
+  const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)};
   $$("[data-cmd]").forEach(x=>x.onclick=()=>command(x.dataset.cmd,x));
 }
 function syncClipboardControls(){
@@ -320,6 +319,7 @@ async function command(cmd,b){
   if(cmd==="sharingRefresh"){submit("sharing.status",{},"sharing",true);return}
   if(cmd==="sharingToggle"){submit("sharing.toggle",{enable:state.connection!=="sending",public:$("#sharePublic")?.value||"Wi-Fi",private:$("#sharePrivate")?.value||"Ethernet"},"sharing");return}
   if(cmd==="peerRefresh"||cmd==="clipPeers"){submit("peer.list",{},currentModule,true);return}
+  if(cmd==="peerApprove"){submit("peer.approve",{peer_id:b.dataset.peerId,approved:b.dataset.approved==="true"},currentModule);return}
   if(cmd==="pcChooseFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose iNSync shared location"});if(!r.canceled){data.pc.sharedPaths=[r.path];renderModule()}return}
   if(cmd==="pcApply"){
     data.pc.role=$("#pcRole")?.value||"idle";data.pc.scope=$("#pcScope")?.value||"internet-only";
@@ -342,9 +342,19 @@ async function command(cmd,b){
   if(cmd==="appsPrev"){data.android.page=Math.max(0,data.android.page-1);renderModule();return}
   if(cmd==="appsNext"){data.android.page++;renderModule();return}
   if(cmd==="appUninstall"||cmd==="appDisable"){const pkg=b.dataset.package||"";const action=cmd==="appDisable"?"disable this system app for user 0":"uninstall this user app";if(!pkg||!confirm("Confirm: "+action+"?\\n\\n"+pkg))return;submit(cmd==="appDisable"?"adb.disable":"adb.uninstall",{package:pkg,serial:data.android.serial},"android");return}
-  if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.iphone.ipa=r.paths[0]||"";data.iphone.validation=null;renderModule()}return}
-  if(cmd==="ipaValidateInstall"){if(!data.iphone.ipa){toast("Choose an IPA first");return}submit("ios.validate",{path:data.iphone.ipa},"validate-install");return}
+  if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.ipa.path=r.paths[0]||"";data.ipa.validation=null;renderModule()}return}
+  if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
+  if(cmd==="ipaStatus"){submit("ios.status",{},"ipa",true);return}
   if(cmd==="iosStatus"){submit("ios.status",{},"iphone",true);return}
+  if(cmd==="iphoneSection"){data.iphone.section=b.dataset.section||"photos";renderModule();if(data.iphone.section==="apps")submit("ios.apps",{},"iphone",true);else if(data.iphone.section==="documents"){if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)}else submit("ios.media.list",{kind:data.iphone.section},"iphone",true);return}
+  if(cmd==="iphoneAppsRefresh"){submit("ios.apps",{},"iphone",true);return}
+  if(cmd==="iphoneAppDelete"){const bundle=b.dataset.bundle||"";if(bundle&&confirm("Delete this app from the iPhone?\n\n"+bundle))submit("ios.app.uninstall",{bundle_id:bundle},"iphone");return}
+  if(cmd==="iphoneDocuments"){data.iphone.bundleId=b.dataset.bundle||"";data.iphone.section="documents";renderModule();if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
+  if(cmd==="iphoneDocsRefresh"){if(!data.iphone.bundleId){toast("Choose an app first");return}submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
+  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send file to app Documents",multi:false});if(!r.canceled)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_path:r.paths[0]},"iphone");return}
+  if(cmd==="iphoneMediaRefresh"){submit("ios.media.list",{kind:b.dataset.kind||data.iphone.section},"iphone",true);return}
+  if(cmd==="iphoneFileSave"){const dest=await window.ttg.dialog.openFolder({title:"Save iPhone file to PC"});if(dest.canceled)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination:dest.path},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination:dest.path},"iphone");return}
+  if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(!path||!confirm("Delete this item from the iPhone?\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
   if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package/content",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
   if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console},b.dataset.console,true);return}
   if(cmd==="consoleInstall"){const key=b.dataset.console;submit("console.pkg",{console:key,paths:data[key].paths},key);return}
@@ -354,7 +364,7 @@ $$(".hotspot").forEach(b=>b.onclick=()=>openModule(b.dataset.module));
 $("#minBtn").onclick=()=>window.ttg.windowControl("minimize");
 $("#closeBtn").onclick=()=>window.ttg.windowControl("close");
 $("#closeModal").onclick=()=>$("#backdrop").classList.remove("open");
-$("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");$("#maxModal").textContent=m.classList.contains("maximized")?"❐":"▢"};
+$("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");$("#maxModal").textContent=m.classList.contains("maximized")?"Restore":"Max"};
 $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#backdrop").classList.remove("open")});

@@ -1,68 +1,76 @@
 # iNSync test status - 2026-09-25
 
-## Proved
+## Source and boundary proof
 
-- Patrol: iNSync is a registered project root.
-- Patrol: THETECHGUY Software Builder remains Builder-owned.
-- Electron main/preload/sidecar JavaScript syntax: PASS.
-- Main renderer JavaScript syntax: PASS.
-- Widget renderer JavaScript syntax: PASS.
-- Python engine compile: PASS.
-- Product unittest suite: 5/5 PASS.
-- JSONL sidecar event bridge: PASS.
-- Engine startup event: PASS.
-- Job queue submission latency proof: 0.43 ms in local engine proof.
-- File copy job: byte-identical result PASS.
-- Job cancellation: PASS on an in-flight 256 MB copy proof.
-- ADB capability detected on ATHENA.
-- ADB device refresh through queued engine job: PASS.
-- Read-only Windows sharing status through engine: PASS.
-- Live sharing state resolved as Wi-Fi public -> Ethernet private.
-- Main renderer contains no child_process, subprocess, PowerShell, or ADB execution path.
-- Minimized widget is a separate BrowserWindow, not an in-page overlay.
+- Patrol project root: PASS.
+- JavaScript syntax: main/preload/sidecar/main renderer/widget renderer PASS.
+- Python backend compile: PASS.
+- Product unittest suite: 11/11 PASS.
+- Renderer has one active module authority.
+- Android popup has no duplicate APK identity; package controls live under Android.
+- IPA and iPhone are separate module surfaces.
+- iPhone popup includes Photos, Music, Apps and App Documents.
+- Renderer contains no direct transport process execution.
+- Job queue/progress/cancellation remains sidecar-owned.
+- Approved-peer text/image clipboard transport is sidecar-owned; received clipboard writes occur in Electron main.
 
 ## Live engine operations
 
-- sharing.status
-- sharing.toggle
-- adb.devices
-- adb.apps
-- adb.install
-- adb.uninstall
+- sharing.status / sharing.toggle
+- peer.list / peer.configure / peer.approve
+- clipboard.text / clipboard.image
 - files.copy
-- peer.list contract
-- clipboard.text contract
-- clipboard.image contract
-- ios.status
-- ios.ipa
-- console.status contract
-- console.pkg contract
+- adb.devices / adb.info / adb.apps / adb.install / adb.uninstall / adb.disable
+- ios.status / ios.validate / ios.ipa
+- ios.apps / ios.app.uninstall
+- ios.media.list / ios.media.pull / ios.media.delete
+- ios.documents.list / ios.documents.pull / ios.documents.push / ios.documents.delete
+- console.status / console.pkg capability contracts
 
-## Installed Windows runtime proof
+## Apple-device proof
 
-- Builder result: complete, exitCode 0.
-- Graphical installer verification: PASS.
+- Builder bundles `pymobiledevice3==11.19.1` in the compiled Windows sidecar.
+- Compiled sidecar starts successfully from the packaged application.
+- Installed sidecar starts successfully from Program Files.
+- Installed capability snapshot reports `ios_bridge=true`, `ios_apps=true`, `ios_media=true`, `ios_documents=true`, and `ipa_install=true`.
+- Live connected-device read succeeded through the installed sidecar: one iPhone detected, product type iPhone14,4, iOS 18.5, and device storage total/free read successfully.
+- Photos support list/save-to-PC/delete.
+- Music support list/save-to-PC; raw deletion is blocked until a library-safe media adapter is qualified.
+- User apps support list/delete.
+- App Documents use House Arrest/AFC for list/send/save/delete.
+
+## Builder / installer proof
+
+- Builder sidecar dependency preparation: PASS.
+- PyInstaller Apple-enabled sidecar compilation: PASS.
+- Electron packaging readiness: PASS.
+- Electron packaging: PASS.
+- Packaged application runtime smoke: PASS.
+- Graphical installer readiness: PASS.
+- Graphical installer creation: PASS.
+- Installer package verification: PASS.
 - Installer ZIP verification: PASS.
 - Installer dry-run: PASS.
-- Installed iNSync.exe hash matches the verified build payload.
-- Installed iNSync-backend.exe hash matches the verified compiled sidecar.
-- Installed main window: one visible compact main surface (~820x750 configured).
-- Minimize transition: main leaves the desktop and the 224x262 floating widget becomes the only on-screen iNSync surface.
-- Second-instance transition: existing main window restores and widget hides; no duplicate main instance is created.
-- Installed transparent-window proof: empty artwork corners match the underlying desktop pixel-for-pixel.
-- Live ATHENA sharing remained running throughout the build/install/runtime proof.
+- Target execution: 12/12 COMPLETE.
+- Verified setup: `installer_output/iNSync-gui-installer-20260925_175155/iNSync Setup.exe`.
+- Installed application root: `C:\Program Files (x86)\THETECHGUY Digital Solutions\iNSync`.
+- Installed app hash equals the verified packaged app hash.
+- Installed backend hash equals the verified packaged backend hash.
 
-## Physically qualified
+## Builder correction discovered during proof
 
-- ATHENA Wi-Fi -> Ethernet Internet sharing works live.
-- Local/network path file-copy engine works with progress/cancel.
-- ADB engine path is available on ATHENA.
+Windows PowerShell 5.1 does not provide PowerShell Core's automatic `$IsWindows` variable. Builder's Python-sidecar verification therefore looked for an extensionless sidecar even after PyInstaller correctly produced `.exe`.
 
-## Capability-gated / next qualification
+`THETECHGUY Software Builder` was corrected to use a platform check based on `Win32NT`; the regression contract passes 6/6 in `tests/test_live_download_build_progress.py`.
 
-- iNSync peer pairing/approval and peer-native clipboard transport.
-- iOS IPA install requires libimobiledevice/ideviceinstaller or the qualified TTG iOS adapter.
-- Console-specific PKG/package install backends.
-- Receiver-side iNSync automatic role detection beyond the current shared state contract.
+## Live networking proof
 
-Missing adapters fill the existing capability boundary; they do not redesign the application.
+- ATHENA Wi-Fi -> Ethernet ICS is working.
+- Ethernet private gateway: `192.168.250.1/24`.
+- iNSync sharing state is engine-owned and remains separate from renderer execution.
+
+## Remaining capability gates
+
+- Console package installation is still adapter-pending in the console projects/roadmaps.
+- Music deletion remains gated for Apple library integrity.
+- Device mutations are not considered physically proved merely because the UI/backend contract exists; destructive operations require explicit live test selection.

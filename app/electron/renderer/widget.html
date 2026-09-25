@@ -74,9 +74,10 @@ window.ttg.onBackendEvent(evt=>{
   if((evt?.type==="job.progress"||evt?.type==="job.queued")&&job&&job.id===activeJob)showJob(job);
   if(evt?.type==="job.finished"&&job&&job.id===activeJob){
     showJob(job);
-    if(job.operation==="peer.list"){peers=job.result?.peers||[];$("#peerText").textContent=peers.length?peers.map(x=>x.name||x.host||x.id).join(", "):"No approved peers";}
+    if(job.operation==="peer.list"){peers=(job.result?.peers||[]).filter(x=>!x.self&&x.approved!==false);$("#peerText").textContent=peers.length?peers.map(x=>x.name||x.host||x.id).join(", "):"No approved peers";}
     if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){const s=job.result?.status||job.result;if(s?.connection)apply({connection:s.connection});}
   }
+  if(evt?.type==="peer.clipboard"){$("#peerText").textContent="Received from "+(evt.sender_name||evt.sender_ip||"peer");}
 });
 (async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(apply);apply(state)})();
 </script>

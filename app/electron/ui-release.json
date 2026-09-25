@@ -6,22 +6,27 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "f1bbcb6ef06a7b98695c7f0cfad4387ff73c6dbeb5dca799d1798895975be4d3",
+    "sha256": "ea8270dc5e06028ac961a88259f65d4e9ab8bd7e914c42e7f96483846ceb7755",
     "widget": "renderer/widget.html",
-    "widgetSha256": "8a0c60216122c3038ab212b340bc239ee0c1369f5cb8c3f7e318fe4bcd4a6348"
+    "widgetSha256": "3aeafb7d8bc8d9b7a071bb4b434e96014373e588773c0e88ce23d42a36d832fb"
   },
   "backend": {
     "manifest": "backend-manifest.json",
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "dc3cd490e5a33090924bc88c389c86c8e09aef7482a51bae7210a78a2800d212",
+    "sha256": "8bbe03165780a412efff64b892ccfd17b53d193cf981a0ba0f0cca1a317bcaeb",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
       "cancellation": true,
       "peerDiscovery": true,
-      "ipaValidation": true
+      "ipaValidation": true,
+      "peerClipboardTransport": true,
+      "appleDeviceBridge": true,
+      "iosMedia": true,
+      "iosApps": true,
+      "iosDocuments": true
     }
   },
   "handoff": {

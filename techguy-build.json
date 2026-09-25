@@ -38,7 +38,15 @@
         "python": "3.13",
         "name": "iNSync-backend",
         "output": "dist/sidecars",
-        "console": false
+        "console": false,
+        "requirements": "requirements-insync-sidecar.txt",
+        "hiddenImports": [
+          "pymobiledevice3.lockdown",
+          "pymobiledevice3.usbmux",
+          "pymobiledevice3.services.afc",
+          "pymobiledevice3.services.house_arrest",
+          "pymobiledevice3.services.installation_proxy"
+        ]
       }
     ],
     "sealedPackage": true,

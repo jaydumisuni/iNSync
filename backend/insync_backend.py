@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import json
 import os
 import plistlib
+import posixpath
 import queue
 import shutil
 import socket
@@ -708,26 +711,68 @@ def files_copy_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 def clipboard_send_text_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     text = str(job.params.get("text") or "")
-    targets = list(job.params.get("targets") or [])
+    targets = [str(x) for x in (job.params.get("targets") or []) if x]
     if not text:
         return unavailable("Clipboard text is empty")
     if not targets:
         return unavailable("Choose at least one approved iNSync peer")
-    return unavailable("Peer clipboard transport is not qualified yet", payload="text", targets=targets)
+    peers, missing = _approved_targets(targets)
+    results = []
+    total = max(1, len(peers))
+    for index, peer in enumerate(peers, 1):
+        if job.cancel.is_set():
+            raise Cancelled()
+        engine.progress(job, 10 + (index - 1) * 80 / total, f"Sending text to {peer.get('name') or peer.get('ip')}")
+        result = PEER_TRANSPORT.send(peer, "clipboard.text", {"text": text})
+        results.append({"peer_id": peer.get("id"), "name": peer.get("name"), **result})
+    failures = [item for item in results if not item.get("ok")]
+    if missing:
+        failures.extend({"peer_id": value, "ok": False, "message": "Peer not discovered"} for value in missing)
+    return {
+        "ok": bool(results) and not failures,
+        "available": True,
+        "message": f"Clipboard text sent to {len(results) - len([x for x in results if not x.get('ok')])} peer(s)" if results else "No approved peers were reachable",
+        "results": results,
+        "missing": missing,
+    }
 
 
 def clipboard_send_image_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     data_url = str(job.params.get("data_url") or "")
-    targets = list(job.params.get("targets") or [])
+    targets = [str(x) for x in (job.params.get("targets") or []) if x]
     if not data_url:
         return unavailable("Clipboard image is empty")
+    if not data_url.startswith("data:image/"):
+        return unavailable("Clipboard image payload is invalid")
+    if len(data_url.encode("utf-8")) > PEER_MAX_MESSAGE - 4096:
+        return unavailable("Clipboard image is too large for peer transport")
     if not targets:
         return unavailable("Choose at least one approved iNSync peer")
-    return unavailable("Peer clipboard transport is not qualified yet", payload="image", targets=targets)
+    peers, missing = _approved_targets(targets)
+    results = []
+    total = max(1, len(peers))
+    for index, peer in enumerate(peers, 1):
+        if job.cancel.is_set():
+            raise Cancelled()
+        engine.progress(job, 10 + (index - 1) * 80 / total, f"Sending image to {peer.get('name') or peer.get('ip')}")
+        result = PEER_TRANSPORT.send(peer, "clipboard.image", {"data_url": data_url})
+        results.append({"peer_id": peer.get("id"), "name": peer.get("name"), **result})
+    failures = [item for item in results if not item.get("ok")]
+    if missing:
+        failures.extend({"peer_id": value, "ok": False, "message": "Peer not discovered"} for value in missing)
+    return {
+        "ok": bool(results) and not failures,
+        "available": True,
+        "message": f"Clipboard image sent to {len(results) - len([x for x in results if not x.get('ok')])} peer(s)" if results else "No approved peers were reachable",
+        "results": results,
+        "missing": missing,
+    }
 
 
 PEER_PORT = 49549
+PEER_DATA_PORT = 49550
 PEER_MAGIC = b"INSYNC_DISCOVER_V1"
+PEER_MAX_MESSAGE = 16 * 1024 * 1024
 
 
 def _peer_config_path() -> Path:
@@ -777,6 +822,7 @@ class PeerDiscovery:
             "approved": True,
             "self": True,
             "port": PEER_PORT,
+            "transfer_port": PEER_DATA_PORT,
         }
 
     def _serve(self) -> None:
@@ -844,6 +890,154 @@ class PeerDiscovery:
 
 
 PEER_DISCOVERY = PeerDiscovery()
+
+
+def _recv_exact(sock: socket.socket, length: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = length
+    while remaining:
+        chunk = sock.recv(min(65536, remaining))
+        if not chunk:
+            raise ConnectionError("peer disconnected")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _peer_send_json(sock: socket.socket, value: dict[str, Any]) -> None:
+    payload = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    if len(payload) > PEER_MAX_MESSAGE:
+        raise ValueError("peer message is too large")
+    sock.sendall(len(payload).to_bytes(4, "big") + payload)
+
+
+def _peer_recv_json(sock: socket.socket) -> dict[str, Any]:
+    raw_len = _recv_exact(sock, 4)
+    length = int.from_bytes(raw_len, "big")
+    if length <= 0 or length > PEER_MAX_MESSAGE:
+        raise ValueError("invalid peer message size")
+    value = json.loads(_recv_exact(sock, length).decode("utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("peer message must be an object")
+    return value
+
+
+class PeerTransport:
+    def __init__(self) -> None:
+        self._thread = threading.Thread(target=self._serve, name="insync-peer-transport", daemon=True)
+        self._thread.start()
+
+    def _serve(self) -> None:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind(("", PEER_DATA_PORT))
+            server.listen(8)
+            server.settimeout(0.5)
+            while True:
+                try:
+                    client, address = server.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                threading.Thread(
+                    target=self._handle_client,
+                    args=(client, address),
+                    name="insync-peer-client",
+                    daemon=True,
+                ).start()
+        except OSError:
+            return
+        finally:
+            server.close()
+
+    def _handle_client(self, client: socket.socket, address: tuple[str, int]) -> None:
+        try:
+            client.settimeout(8)
+            message = _peer_recv_json(client)
+            config = _load_peer_config()
+            sender_id = str(message.get("sender_id") or "")
+            approved = set(str(x) for x in config.get("approved_ids", []))
+            if not sender_id or sender_id not in approved:
+                _peer_send_json(client, {"ok": False, "message": "Sender is not approved"})
+                return
+            action = str(message.get("action") or "")
+            sender_name = str(message.get("sender_name") or address[0])
+            if action == "clipboard.text":
+                text = str(message.get("text") or "")
+                if not text:
+                    _peer_send_json(client, {"ok": False, "message": "Clipboard text is empty"})
+                    return
+                emit(
+                    "peer.clipboard",
+                    kind="text",
+                    text=text,
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    sender_ip=address[0],
+                )
+                _peer_send_json(client, {"ok": True, "message": "Text clipboard received"})
+                return
+            if action == "clipboard.image":
+                data_url = str(message.get("data_url") or "")
+                if not data_url.startswith("data:image/"):
+                    _peer_send_json(client, {"ok": False, "message": "Clipboard image payload is invalid"})
+                    return
+                emit(
+                    "peer.clipboard",
+                    kind="image",
+                    data_url=data_url,
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    sender_ip=address[0],
+                )
+                _peer_send_json(client, {"ok": True, "message": "Image clipboard received"})
+                return
+            _peer_send_json(client, {"ok": False, "message": "Unsupported peer action"})
+        except Exception as exc:
+            try:
+                _peer_send_json(client, {"ok": False, "message": f"{type(exc).__name__}: {exc}"})
+            except Exception:
+                pass
+        finally:
+            try:
+                client.close()
+            except OSError:
+                pass
+
+    def send(self, peer: dict[str, Any], action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        config = _load_peer_config()
+        ip = str(peer.get("ip") or "")
+        if not ip:
+            return unavailable("Peer has no reachable IP", peer_id=peer.get("id"))
+        port = int(peer.get("transfer_port") or PEER_DATA_PORT)
+        message = {
+            "action": action,
+            "sender_id": config["peer_id"],
+            "sender_name": socket.gethostname(),
+            **payload,
+        }
+        try:
+            with socket.create_connection((ip, port), timeout=5) as sock:
+                sock.settimeout(10)
+                _peer_send_json(sock, message)
+                result = _peer_recv_json(sock)
+        except OSError as exc:
+            return unavailable(f"Peer transport failed: {exc}", peer_id=peer.get("id"), ip=ip)
+        return result
+
+
+PEER_TRANSPORT = PeerTransport()
+
+
+def _approved_targets(target_ids: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    wanted = {str(x) for x in target_ids if x}
+    peers = PEER_DISCOVERY.discover(timeout=1.0)
+    selected = [peer for peer in peers if not peer.get("self") and peer.get("id") in wanted]
+    found = {str(peer.get("id")) for peer in selected}
+    missing = sorted(wanted - found)
+    return selected, missing
 
 
 def peers_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -933,11 +1127,92 @@ def _parse_key_value_lines(text: str) -> dict[str, str]:
     return values
 
 
+def _pmd_available() -> bool:
+    try:
+        return importlib.util.find_spec("pymobiledevice3") is not None
+    except Exception:
+        return False
+
+
+def _run_async(coro):
+    return asyncio.run(coro)
+
+
+async def _pmd_lockdown(serial: str = ""):
+    from pymobiledevice3.lockdown import create_using_usbmux
+
+    return await create_using_usbmux(
+        serial=serial or None,
+        autopair=True,
+        connection_type="USB",
+        pair_timeout=60,
+    )
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _ios_status_pmd(serial: str = "") -> dict[str, Any]:
+    from pymobiledevice3.services.afc import AfcService
+    from pymobiledevice3.usbmux import select_devices_by_connection_type
+
+    devices = await select_devices_by_connection_type(connection_type="USB")
+    ids = [str(device.serial) for device in devices]
+    if not ids:
+        return ok("0 iOS device(s)", devices=[], available=True)
+
+    target = serial or ids[0]
+    async with await _pmd_lockdown(target) as lockdown:
+        values = dict(lockdown.all_values or {})
+        storage: dict[str, int] = {}
+        async with AfcService(lockdown=lockdown) as afc:
+            fs = await afc.get_device_info()
+            total = _as_int(fs.get("FSTotalBytes"))
+            free = _as_int(fs.get("FSFreeBytes"))
+            if total is not None:
+                storage["total"] = total
+            if free is not None:
+                storage["free"] = free
+        return ok(
+            f"{len(ids)} iOS device(s)",
+            devices=ids,
+            device={
+                "udid": target,
+                "name": values.get("DeviceName", ""),
+                "product_type": values.get("ProductType", ""),
+                "ios_version": values.get("ProductVersion", ""),
+                "build": values.get("BuildVersion", ""),
+            },
+            storage=storage,
+            backend="pymobiledevice3",
+        )
+
+
 def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    serial = str(job.params.get("serial") or "")
+    if _pmd_available():
+        engine.progress(job, 15, "Reading iPhone status")
+        try:
+            return _run_async(_ios_status_pmd(serial))
+        except Exception as exc:
+            pmd_error = f"{type(exc).__name__}: {exc}"
+        else:
+            pmd_error = ""
+    else:
+        pmd_error = "pymobiledevice3 is not bundled in this runtime"
+
     idevice_id = command_path("idevice_id")
     ideviceinfo = command_path("ideviceinfo")
     if not idevice_id:
-        return unavailable("iOS device-service backend is not installed")
+        return unavailable(
+            "Apple device bridge is unavailable",
+            detail=pmd_error,
+            devices=[],
+        )
     rc, out, err = run_process(job, [idevice_id, "-l"], timeout=20)
     ids = [x.strip() for x in out.splitlines() if x.strip()] if rc == 0 else []
     result: dict[str, Any] = {
@@ -946,6 +1221,7 @@ def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "devices": ids,
         "message": f"{len(ids)} iOS device(s)",
         "error": err if rc else "",
+        "backend": "libimobiledevice",
     }
     if ids and ideviceinfo:
         engine.progress(job, 45, "Reading iPhone device status")
@@ -964,16 +1240,329 @@ def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         rc3, disk_out, _ = run_process(job, [ideviceinfo, "-u", ids[0], "-q", "com.apple.disk_usage"], timeout=30)
         if rc3 == 0:
             disk = _parse_key_value_lines(disk_out)
-            def number(key: str) -> int | None:
-                try:
-                    return int(disk.get(key, ""))
-                except ValueError:
-                    return None
-            total = number("TotalDiskCapacity") or number("TotalDataCapacity")
-            free = number("TotalDataAvailable")
+            total = _as_int(disk.get("TotalDiskCapacity")) or _as_int(disk.get("TotalDataCapacity"))
+            free = _as_int(disk.get("TotalDataAvailable"))
             if total or free:
                 result["storage"] = {"total": total, "free": free}
     return result
+
+
+async def _ios_apps_pmd(serial: str = "") -> list[dict[str, Any]]:
+    from pymobiledevice3.services.installation_proxy import InstallationProxyService
+
+    async with await _pmd_lockdown(serial) as lockdown:
+        apps = await InstallationProxyService(lockdown=lockdown).get_apps(
+            application_type="User",
+            calculate_sizes=True,
+        )
+        rows: list[dict[str, Any]] = []
+        for bundle_id, info in apps.items():
+            static = _as_int(info.get("StaticDiskUsage")) or 0
+            dynamic = _as_int(info.get("DynamicDiskUsage")) or 0
+            rows.append({
+                "bundle_id": str(bundle_id),
+                "name": (
+                    info.get("CFBundleDisplayName")
+                    or info.get("CFBundleName")
+                    or info.get("CFBundleExecutable")
+                    or bundle_id
+                ),
+                "version": info.get("CFBundleShortVersionString") or info.get("CFBundleVersion") or "",
+                "size": static + dynamic,
+                "documents": bool(info.get("UIFileSharingEnabled") or info.get("UISupportsDocumentBrowser")),
+            })
+        return sorted(rows, key=lambda item: str(item.get("name", "")).casefold())
+
+
+def ios_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    if not _pmd_available():
+        return unavailable("Installed-app management requires the bundled Apple device bridge", apps=[])
+    engine.progress(job, 15, "Reading installed iPhone apps")
+    try:
+        apps = _run_async(_ios_apps_pmd(str(job.params.get("serial") or "")))
+        return ok(f"{len(apps)} user app(s)", apps=apps)
+    except Exception as exc:
+        return unavailable(f"Could not read iPhone apps: {exc}", apps=[])
+
+
+async def _ios_app_uninstall_pmd(bundle_id: str, serial: str = "") -> None:
+    from pymobiledevice3.services.installation_proxy import InstallationProxyService
+
+    async with await _pmd_lockdown(serial) as lockdown:
+        await InstallationProxyService(lockdown=lockdown).uninstall(bundle_id)
+
+
+def ios_app_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    if not bundle_id:
+        return unavailable("Choose an app before deleting it")
+    if not _pmd_available():
+        return unavailable("App delete requires the bundled Apple device bridge", bundle_id=bundle_id)
+    engine.progress(job, 20, f"Deleting {bundle_id}")
+    try:
+        _run_async(_ios_app_uninstall_pmd(bundle_id, str(job.params.get("serial") or "")))
+        return ok("App deleted", bundle_id=bundle_id)
+    except Exception as exc:
+        return unavailable(f"App delete failed: {exc}", bundle_id=bundle_id)
+
+
+IOS_MEDIA_ROOTS = {
+    "photos": "DCIM",
+    "music": "iTunes_Control/Music",
+}
+IOS_PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png", ".dng", ".mov", ".mp4", ".aae"}
+IOS_MUSIC_EXTS = {".mp3", ".m4a", ".aac", ".alac", ".wav", ".aiff", ".flac", ".mp4"}
+
+
+def _ios_media_root(kind: str) -> str:
+    kind = kind.lower()
+    if kind not in IOS_MEDIA_ROOTS:
+        raise ValueError("Unknown iPhone media category")
+    return IOS_MEDIA_ROOTS[kind]
+
+
+def _ios_scoped_remote(kind: str, remote_path: str) -> str:
+    root = _ios_media_root(kind)
+    value = posixpath.normpath("/" + str(remote_path or "").lstrip("/")).lstrip("/")
+    if value != root and not value.startswith(root + "/"):
+        raise ValueError("Remote path is outside the selected iPhone media scope")
+    return value
+
+
+async def _ios_media_list_pmd(kind: str, serial: str = "", limit: int = 240) -> list[dict[str, Any]]:
+    from pymobiledevice3.services.afc import AfcService
+
+    root = _ios_media_root(kind)
+    allowed = IOS_PHOTO_EXTS if kind == "photos" else IOS_MUSIC_EXTS
+    rows: list[dict[str, Any]] = []
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with AfcService(lockdown=lockdown) as afc:
+            try:
+                async for remote in afc.dirlist(root, -1):
+                    if len(rows) >= limit:
+                        break
+                    try:
+                        info = await afc.stat(remote)
+                    except Exception:
+                        continue
+                    if info.get("st_ifmt") != "S_IFREG":
+                        continue
+                    suffix = Path(str(remote)).suffix.lower()
+                    if allowed and suffix not in allowed:
+                        continue
+                    rows.append({
+                        "kind": kind,
+                        "path": str(remote),
+                        "name": posixpath.basename(str(remote)),
+                        "size": int(info.get("st_size") or 0),
+                    })
+            except Exception:
+                return []
+    return sorted(rows, key=lambda item: str(item["path"]).casefold())
+
+
+def ios_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    kind = str(job.params.get("kind") or "photos").lower()
+    if not _pmd_available():
+        return unavailable("Photo/music browsing requires the bundled Apple device bridge", kind=kind, items=[])
+    engine.progress(job, 15, f"Reading iPhone {kind}")
+    try:
+        items = _run_async(_ios_media_list_pmd(kind, str(job.params.get("serial") or "")))
+        return ok(f"{len(items)} {kind} item(s)", kind=kind, items=items)
+    except Exception as exc:
+        return unavailable(f"Could not list iPhone {kind}: {exc}", kind=kind, items=[])
+
+
+async def _ios_media_pull_pmd(kind: str, remote_path: str, destination: Path, serial: str = "") -> Path:
+    from pymobiledevice3.services.afc import AfcService
+
+    remote = _ios_scoped_remote(kind, remote_path)
+    destination.mkdir(parents=True, exist_ok=True)
+    target = destination / posixpath.basename(remote)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with AfcService(lockdown=lockdown) as afc:
+            await afc.pull(remote, str(target))
+    return target
+
+
+def ios_media_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    kind = str(job.params.get("kind") or "photos").lower()
+    remote_path = str(job.params.get("remote_path") or "")
+    destination_raw = str(job.params.get("destination") or "").strip()
+    if not remote_path or not destination_raw:
+        return unavailable("Choose an iPhone item and PC destination")
+    destination = Path(destination_raw)
+    if not _pmd_available():
+        return unavailable("Media export requires the bundled Apple device bridge", kind=kind)
+    engine.progress(job, 15, "Sending iPhone item to PC")
+    try:
+        target = _run_async(_ios_media_pull_pmd(kind, remote_path, destination, str(job.params.get("serial") or "")))
+        return ok("Saved to PC", kind=kind, local_path=str(target), remote_path=remote_path)
+    except Exception as exc:
+        return unavailable(f"Could not save iPhone item: {exc}", kind=kind, remote_path=remote_path)
+
+
+async def _ios_media_delete_pmd(kind: str, remote_path: str, serial: str = "") -> None:
+    from pymobiledevice3.services.afc import AfcService
+
+    remote = _ios_scoped_remote(kind, remote_path)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with AfcService(lockdown=lockdown) as afc:
+            await afc.rm(remote)
+
+
+def ios_media_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    kind = str(job.params.get("kind") or "photos").lower()
+    remote_path = str(job.params.get("remote_path") or "")
+    if not remote_path:
+        return unavailable("Choose an iPhone item before deleting it", kind=kind)
+    if kind == "music":
+        return unavailable(
+            "Music delete is blocked until the library-safe Apple media adapter is qualified",
+            kind=kind,
+            remote_path=remote_path,
+        )
+    if not _pmd_available():
+        return unavailable("Photo delete requires the bundled Apple device bridge", kind=kind)
+    engine.progress(job, 20, "Deleting iPhone photo")
+    try:
+        _run_async(_ios_media_delete_pmd(kind, remote_path, str(job.params.get("serial") or "")))
+        return ok("Photo deleted", kind=kind, remote_path=remote_path)
+    except Exception as exc:
+        return unavailable(f"Photo delete failed: {exc}", kind=kind, remote_path=remote_path)
+
+
+def _ios_document_path(remote_path: str) -> str:
+    value = posixpath.normpath("/" + str(remote_path or "").lstrip("/"))
+    if value.startswith("/../") or value == "/..":
+        raise ValueError("Invalid app Documents path")
+    return value
+
+
+async def _ios_documents_service(lockdown, bundle_id: str):
+    from pymobiledevice3.services.house_arrest import HouseArrestService
+
+    return await HouseArrestService.create(
+        lockdown=lockdown,
+        bundle_id=bundle_id,
+        documents_only=True,
+    )
+
+
+async def _ios_documents_list_pmd(bundle_id: str, serial: str = "", limit: int = 240) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            async for remote in docs.dirlist("/", -1):
+                if len(rows) >= limit:
+                    break
+                try:
+                    info = await docs.stat(remote)
+                except Exception:
+                    continue
+                if info.get("st_ifmt") != "S_IFREG":
+                    continue
+                rows.append({
+                    "kind": "documents",
+                    "bundle_id": bundle_id,
+                    "path": str(remote),
+                    "name": posixpath.basename(str(remote)),
+                    "size": int(info.get("st_size") or 0),
+                })
+    return sorted(rows, key=lambda item: str(item["path"]).casefold())
+
+
+def ios_documents_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    if not bundle_id:
+        return unavailable("Choose an app before browsing Documents", bundle_id=bundle_id, items=[])
+    if not _pmd_available():
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id, items=[])
+    engine.progress(job, 15, "Reading app Documents")
+    try:
+        items = _run_async(_ios_documents_list_pmd(bundle_id, str(job.params.get("serial") or "")))
+        return ok(f"{len(items)} document item(s)", bundle_id=bundle_id, items=items)
+    except Exception as exc:
+        return unavailable(f"Could not browse app Documents: {exc}", bundle_id=bundle_id, items=[])
+
+
+async def _ios_documents_pull_pmd(bundle_id: str, remote_path: str, destination: Path, serial: str = "") -> Path:
+    remote = _ios_document_path(remote_path)
+    destination.mkdir(parents=True, exist_ok=True)
+    target = destination / posixpath.basename(remote)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            await docs.pull(remote, str(target))
+    return target
+
+
+def ios_documents_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    remote_path = str(job.params.get("remote_path") or "")
+    destination_raw = str(job.params.get("destination") or "").strip()
+    if not bundle_id or not remote_path or not destination_raw:
+        return unavailable("Choose an app document and PC destination")
+    destination = Path(destination_raw)
+    if not _pmd_available():
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
+    engine.progress(job, 15, "Saving app document to PC")
+    try:
+        target = _run_async(_ios_documents_pull_pmd(bundle_id, remote_path, destination, str(job.params.get("serial") or "")))
+        return ok("Document saved to PC", bundle_id=bundle_id, local_path=str(target), remote_path=remote_path)
+    except Exception as exc:
+        return unavailable(f"Could not save app document: {exc}", bundle_id=bundle_id)
+
+
+async def _ios_documents_push_pmd(bundle_id: str, local_path: Path, serial: str = "") -> str:
+    remote = "/" + local_path.name
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            await docs.push(str(local_path), remote)
+    return remote
+
+
+def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    local_path = Path(str(job.params.get("local_path") or ""))
+    if not bundle_id or not local_path.is_file():
+        return unavailable("Choose an app and local file before sending")
+    if not _pmd_available():
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
+    engine.progress(job, 15, "Sending file to app Documents")
+    try:
+        remote = _run_async(_ios_documents_push_pmd(bundle_id, local_path, str(job.params.get("serial") or "")))
+        return ok("File sent to app Documents", bundle_id=bundle_id, remote_path=remote, local_path=str(local_path))
+    except Exception as exc:
+        return unavailable(f"Could not send app document: {exc}", bundle_id=bundle_id)
+
+
+async def _ios_documents_delete_pmd(bundle_id: str, remote_path: str, serial: str = "") -> None:
+    remote = _ios_document_path(remote_path)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            await docs.rm(remote)
+
+
+def ios_documents_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    remote_path = str(job.params.get("remote_path") or "")
+    if not bundle_id or not remote_path:
+        return unavailable("Choose an app document before deleting it")
+    if not _pmd_available():
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
+    engine.progress(job, 20, "Deleting app document")
+    try:
+        _run_async(_ios_documents_delete_pmd(bundle_id, remote_path, str(job.params.get("serial") or "")))
+        return ok("App document deleted", bundle_id=bundle_id, remote_path=remote_path)
+    except Exception as exc:
+        return unavailable(f"Could not delete app document: {exc}", bundle_id=bundle_id)
+
+
+async def _ios_ipa_install_pmd(path: Path, serial: str = "") -> None:
+    from pymobiledevice3.services.installation_proxy import InstallationProxyService
+
+    async with await _pmd_lockdown(serial) as lockdown:
+        await InstallationProxyService(lockdown=lockdown).install_from_local(path)
 
 
 def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -984,10 +1573,19 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         metadata = _ipa_metadata(path)
     except Exception as exc:
         return unavailable(f"IPA validation failed: {exc}")
+
+    if _pmd_available():
+        engine.progress(job, 20, "Installing IPA through Apple device bridge")
+        try:
+            _run_async(_ios_ipa_install_pmd(path, str(job.params.get("serial") or "")))
+            return ok("IPA installed", path=str(path), metadata=metadata, backend="pymobiledevice3")
+        except Exception as exc:
+            return unavailable(f"IPA install failed: {exc}", path=str(path), metadata=metadata)
+
     installer = command_path("ideviceinstaller")
     if not installer:
         return unavailable(
-            "IPA is validated, but the install backend is not installed",
+            "IPA is validated, but the Apple install backend is not installed",
             metadata=metadata,
             path=str(path),
         )
@@ -999,8 +1597,8 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "message": out or err,
         "path": str(path),
         "metadata": metadata,
+        "backend": "ideviceinstaller",
     }
-
 
 def console_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     console = str(job.params.get("console") or "console")
@@ -1033,6 +1631,15 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "ios.status": ios_status_job,
     "ios.validate": ios_validate_job,
     "ios.ipa": ios_ipa_job,
+    "ios.apps": ios_apps_job,
+    "ios.app.uninstall": ios_app_uninstall_job,
+    "ios.media.list": ios_media_list_job,
+    "ios.media.pull": ios_media_pull_job,
+    "ios.media.delete": ios_media_delete_job,
+    "ios.documents.list": ios_documents_list_job,
+    "ios.documents.pull": ios_documents_pull_job,
+    "ios.documents.push": ios_documents_push_job,
+    "ios.documents.delete": ios_documents_delete_job,
     "console.status": console_status_job,
     "console.pkg": console_pkg_job,
 }
@@ -1048,12 +1655,17 @@ def snapshot() -> dict[str, Any]:
             "network_sharing": sys.platform == "win32",
             "file_copy": True,
             "adb": bool(adb),
-            "ios": bool(command_path("idevice_id")),
+            "ios": _pmd_available() or bool(command_path("idevice_id")),
+            "ios_bridge": _pmd_available(),
+            "ios_media": _pmd_available(),
+            "ios_apps": _pmd_available(),
+            "ios_documents": _pmd_available(),
+            "ipa_install": _pmd_available() or bool(command_path("ideviceinstaller")),
             "ipa_validation": True,
             "peer_discovery": True,
             "peer_roles": True,
             "console_pkg": "adapter-pending",
-            "clipboard_peer": "approval-transport-pending",
+            "clipboard_peer": True,
         },
     )
 

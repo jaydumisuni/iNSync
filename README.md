@@ -7,76 +7,60 @@ THETECHGUY DIGITAL SOLUTIONS local transport and device bridge.
 iNSync uses one transport core with capability-gated adapters for:
 
 - Internet sharing / normal-mode rollback
-- PC-to-PC file and Internet sharing
-- Selective text/image clipboard exchange
-- Android ADB, APK install and app management
-- iPhone / IPA transport with signing/provisioning checks
-- Console package/file transport behind qualified device-specific adapters
+- PC peer discovery, roles and selective sharing
+- Local, mapped-drive and UNC file transfer
+- Approved-peer text/image clipboard sync
+- Android ADB package install and app management
+- IPA validation/install as its own Apple package surface
+- iPhone Photos, Music export, installed apps and app Documents
+- Console package/file surfaces behind qualified console-specific adapters
 
-The full application and the minimized clipboard/connection widget share one main-process state contract. The minimized widget is a real desktop window and only appears when the main iNSync window is minimized.
+The full application and the minimized clipboard/connection widget share one main-process state contract. Transport work never runs in the Electron renderer.
 
-## Connection state
+## UI contract
 
-The original ghost glasses in the supplied artwork are recolored in-place:
+The supplied standalone/glass popup language is the active UI authority.
 
-- Red - disconnected
-- Blue - receiving
-- Green - sending
+- Android has one Android surface. APK/APKS/XAPK/split-package work lives inside Android; there is no duplicate APK tile in the popup.
+- IPA is its own popup for choosing, validating and installing `.ipa`.
+- iPhone is separate from IPA and exposes Photos, Music, Apps and App Documents.
+- Photos: list, save to PC, delete.
+- Music: list and save to PC. Raw delete is intentionally blocked until a library-safe Apple media adapter is qualified.
+- Apps: list installed user apps and delete.
+- App Documents: list, send a PC file into Documents, save to PC, delete.
+- Console popups keep the same iNSync glass language; package install remains capability-gated until the matching console backend is qualified.
 
-No second glasses overlay is rendered.
+The original ghost glasses are recolored in place: red = disconnected, blue = receiving, green = sending. No second glasses overlay is rendered.
 
 ## Engine boundary
 
-The Electron renderers do not run transport commands.
-
 Renderer -> preload IPC -> Electron main -> JSONL sidecar -> queued worker jobs.
 
-Long-running operations return a job ID immediately. The engine streams progress/result events and supports cancellation. This keeps the UI responsive while ADB installs, file copies, network transitions, and future device adapters are active.
+Long-running operations return a job ID immediately. The sidecar streams progress/results and supports cancellation, preventing ADB installs, file transfers, Apple-device work and network changes from blocking the UI.
 
-## Functional UI
-
-Current popup controls include:
-
-- Sharing status / Start sharing / Back to normal
-- File and folder explorers with destination selection
-- PC Share using local, mapped, or UNC destinations
-- Clipboard text/image selection
-- Android device refresh, APK selection/install, user-app list/uninstall
-- IPA selection/device status/install when a qualified iOS backend exists
-- Console package selection/status/install queue surfaces
-
-Unsupported backend capabilities remain visibly gated instead of being simulated as working.
+The Apple-device bridge is bundled into the compiled sidecar by THETECHGUY Software Builder through the project-declared `requirements-insync-sidecar.txt`; customer PCs do not need a manual Python installation.
 
 ## Build ownership
 
-Application source lives in this repository.
+Application source and product behavior live in this repository. THETECHGUY Software Builder owns Electron staging, Builder-owned Python sidecar dependencies, PyInstaller sidecar compilation, Electron packaging, ASAR/fuse hardening, native packaging, signing/release packaging and graphical installers. Patrol owns project-placement and ownership enforcement.
 
-THETECHGUY Software Builder owns:
-- Electron staging
-- Python sidecar compilation
-- ASAR/fuse hardening
-- native package generation
-- signing/release packaging
-- graphical installers
+## Current Windows proof
 
-Patrol owns project-placement and ownership enforcement.
+- Patrol allows `D:\projects\iNSync`.
+- Product tests: 11/11 PASS.
+- Renderer/widget/main/preload/sidecar syntax and Python compile: PASS.
+- Builder flow: 12/12 complete.
+- Builder runtime smoke: PASS.
+- Graphical installer verification: PASS.
+- Installer ZIP verification: PASS.
+- Installer dry-run: PASS.
+- Installed `iNSync.exe` and `iNSync-backend.exe` hashes match the verified Builder payloads.
+- Installed compiled sidecar reports ADB, peer clipboard, iOS bridge, iOS apps, iOS media, iOS Documents, IPA install and Windows sharing capabilities.
+- Live connected iPhone proof: one iPhone detected through bundled `pymobiledevice3`; iOS 18.5, iPhone14,4 and device storage were read successfully.
+- ATHENA Wi-Fi -> Ethernet Internet sharing remained working while iNSync was rebuilt and installed.
 
-Native release targets are built on their native host.
+## Capability gates
 
-## Current proof
-
-ATHENA:
-- Patrol allows D:\projects\iNSync
-- Patrol allows D:\projects\THETECHGUY Software Builder
-- JSONL engine protocol works through the Node sidecar bridge
-- job submission returns immediately
-- file-copy engine transfers byte-identical data
-- running file-copy job cancellation is proved
-- live sharing status resolves Wi-Fi -> Ethernet without mutating the working connection
-- ADB is available and ADB device discovery runs as an engine job
-- renderer/preload/main/sidecar syntax checks pass
-- product tests pass 5/5
-
-KRATOS:
-- prior Linux DEB install and main-window/widget transition were proved
-- Linux release will be rebuilt from the same source after this Windows functional freeze
+- Music deletion is intentionally blocked until the Apple music-library database can be updated safely.
+- Console package install remains gated per console/firmware until the PS/Xbox/Switch adapters are qualified.
+- Destructive operations require explicit user selection/confirmation.

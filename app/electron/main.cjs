@@ -1,4 +1,4 @@
-const {app,BrowserWindow,ipcMain,screen,dialog,clipboard}=require("electron");
+const {app,BrowserWindow,ipcMain,screen,dialog,clipboard,nativeImage}=require("electron");
 const path=require("node:path");
 const {SidecarBridge}=require("./sidecar.cjs");
 const manifest=require("./backend-manifest.json");
@@ -32,6 +32,14 @@ function forwardBackendEvent(event){
   if(event?.type==="sharing.state"&&event.connection){
     state={...state,connection:event.connection};
     broadcastState();
+  }
+  if(event?.type==="peer.clipboard"&&state.clipboardEnabled){
+    if(event.kind==="text"&&typeof event.text==="string"){
+      clipboard.writeText(event.text);
+    }else if(event.kind==="image"&&typeof event.data_url==="string"){
+      const image=nativeImage.createFromDataURL(event.data_url);
+      if(!image.isEmpty())clipboard.writeImage(image);
+    }
   }
   sendToWindows("insync:backend:event",event);
 }
