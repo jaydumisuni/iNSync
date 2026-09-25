@@ -98,5 +98,65 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn("x.approved!==false", widget)
 
 
+    def test_backend_start_is_silent_until_peer_features_are_used(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        sidecar = (ROOT / "app" / "electron" / "sidecar.cjs").read_text(encoding="utf-8")
+        self.assertIn("windowsHide:true", sidecar)
+        self.assertIn("creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == \"win32\" else 0)", backend)
+        self.assertIn("self._thread: threading.Thread | None = None", backend)
+        self.assertIn("def ensure_peer_network() -> None:", backend)
+        discovery_ctor = backend.split("class PeerDiscovery:", 1)[1].split("    def start(self)", 1)[0]
+        transport_ctor = backend.split("class PeerTransport:", 1)[1].split("    def start(self)", 1)[0]
+        self.assertNotIn("self._thread.start()", discovery_ctor)
+        self.assertNotIn("self._thread.start()", transport_ctor)
+
+    def test_android_has_no_guarded_system_app_path(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        self.assertNotIn('"Guarded"', renderer)
+        self.assertNotIn('data-cmd="appDisable"', renderer)
+        self.assertIn('["shell", "pm", "uninstall", "--user", "0", package]', backend)
+        self.assertIn('"method": "pm-uninstall-user-0"', backend)
+        self.assertIn('{"package": package, "kind": "system", "action": "uninstall"}', backend)
+
+    def test_device_lists_scroll_without_visible_scrollbar_and_support_views(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            'data-cmd="iphoneView"',
+            'data-view="list"',
+            'data-view="large"',
+            'scrollbar-width:none',
+            '.app-list::-webkit-scrollbar',
+            '.media-list::-webkit-scrollbar',
+            '.media-list.large',
+        ):
+            self.assertIn(token, renderer)
+        self.assertNotIn("slice(0,6).map(app=>", renderer)
+        self.assertNotIn("slice(0,7).map(item=>iphoneFileRow", renderer)
+
+    def test_popup_controls_and_trimmed_icons_use_dedicated_assets(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="maximize-glyph"', renderer)
+        self.assertIn('class="modal-window-btn close"', renderer)
+        self.assertNotIn('>Max</button>', renderer)
+        self.assertNotIn(".icon-apk", renderer)
+        icon_root = ROOT / "app" / "electron" / "renderer" / "assets" / "icons"
+        for name in ("sharing","playstation","xbox","switch","iphone","ipa","android","files","clipboard","pc","home"):
+            self.assertTrue((icon_root / f"{name}.png").is_file(), name)
+
+    def test_widget_stays_expanded_during_interaction(self):
+        widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        for token in (
+            '#shell:hover #card,#card.expanded,#card:focus-within',
+            '#card{-webkit-app-region:no-drag',
+            '.top{-webkit-app-region:drag',
+            'function expandWidget()',
+            'card.addEventListener("pointerdown",expandWidget)',
+            'card.addEventListener("focusin",expandWidget)',
+            'collapseTimer=setTimeout',
+        ):
+            self.assertIn(token, widget)
+
+
 if __name__ == "__main__":
     unittest.main()

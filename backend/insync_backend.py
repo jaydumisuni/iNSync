@@ -570,7 +570,7 @@ def adb_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     system = _package_lines(out_sys) if rc_sys == 0 else []
     apps = (
         [{"package": package, "kind": "user", "action": "uninstall"} for package in user]
-        + [{"package": package, "kind": "system", "action": "disable"} for package in system]
+        + [{"package": package, "kind": "system", "action": "uninstall"} for package in system]
     )
     return {
         "ok": rc_user == 0 or rc_sys == 0,
@@ -632,9 +632,30 @@ def adb_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     if not package:
         return unavailable("Choose an app before uninstalling")
     serial = str(job.params.get("serial") or "")
-    engine.progress(job, 20, f"Uninstalling {package}")
+    engine.progress(job, 15, f"Uninstalling {package}")
     rc, out, err = run_process(job, _adb_prefix(serial) + ["uninstall", package], timeout=90)
-    return {"ok": rc == 0, "available": True, "message": out or err or ("Uninstalled" if rc == 0 else "Uninstall failed"), "package": package}
+    if rc == 0:
+        return {
+            "ok": True,
+            "available": True,
+            "message": out or "Uninstalled",
+            "package": package,
+            "method": "adb-uninstall",
+        }
+    engine.progress(job, 58, f"Removing {package} for Android user 0")
+    rc2, out2, err2 = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "pm", "uninstall", "--user", "0", package],
+        timeout=90,
+    )
+    return {
+        "ok": rc2 == 0,
+        "available": True,
+        "message": out2 or err2 or err or out or ("Removed for user 0" if rc2 == 0 else "Uninstall failed"),
+        "package": package,
+        "method": "pm-uninstall-user-0" if rc2 == 0 else "failed",
+        "direct_error": "" if rc == 0 else (err or out),
+    }
 
 
 def adb_disable_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -805,8 +826,15 @@ def _save_peer_config(value: dict[str, Any]) -> None:
 
 class PeerDiscovery:
     def __init__(self) -> None:
-        self._thread = threading.Thread(target=self._serve, name="insync-peer-discovery", daemon=True)
-        self._thread.start()
+        self._thread: threading.Thread | None = None
+        self._start_lock = threading.Lock()
+
+    def start(self) -> None:
+        with self._start_lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._thread = threading.Thread(target=self._serve, name="insync-peer-discovery", daemon=True)
+            self._thread.start()
 
     @staticmethod
     def _record(ip: str = "") -> dict[str, Any]:
@@ -850,6 +878,7 @@ class PeerDiscovery:
             sock.close()
 
     def discover(self, timeout: float = 0.8) -> list[dict[str, Any]]:
+        self.start()
         config = _load_peer_config()
         approved = set(str(x) for x in config.get("approved_ids", []))
         peers: dict[str, dict[str, Any]] = {}
@@ -924,8 +953,15 @@ def _peer_recv_json(sock: socket.socket) -> dict[str, Any]:
 
 class PeerTransport:
     def __init__(self) -> None:
-        self._thread = threading.Thread(target=self._serve, name="insync-peer-transport", daemon=True)
-        self._thread.start()
+        self._thread: threading.Thread | None = None
+        self._start_lock = threading.Lock()
+
+    def start(self) -> None:
+        with self._start_lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._thread = threading.Thread(target=self._serve, name="insync-peer-transport", daemon=True)
+            self._thread.start()
 
     def _serve(self) -> None:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1031,7 +1067,13 @@ class PeerTransport:
 PEER_TRANSPORT = PeerTransport()
 
 
+def ensure_peer_network() -> None:
+    PEER_DISCOVERY.start()
+    PEER_TRANSPORT.start()
+
+
 def _approved_targets(target_ids: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    ensure_peer_network()
     wanted = {str(x) for x in target_ids if x}
     peers = PEER_DISCOVERY.discover(timeout=1.0)
     selected = [peer for peer in peers if not peer.get("self") and peer.get("id") in wanted]
@@ -1041,13 +1083,16 @@ def _approved_targets(target_ids: list[str]) -> tuple[list[dict[str, Any]], list
 
 
 def peers_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
-    engine.progress(job, 15, "Discovering iNSync peers")
+    engine.progress(job, 15, "Starting peer discovery")
+    ensure_peer_network()
+    engine.progress(job, 30, "Discovering iNSync peers")
     peers = PEER_DISCOVERY.discover()
     remote = [peer for peer in peers if not peer.get("self")]
     return ok(f"{len(remote)} remote iNSync peer(s) found", peers=peers)
 
 
 def peer_configure_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    ensure_peer_network()
     role = str(job.params.get("role") or "idle").lower()
     scope = str(job.params.get("scope") or "internet-only").lower()
     if role not in {"provider", "receiver", "idle"}:
@@ -1063,6 +1108,7 @@ def peer_configure_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 
 def peer_approve_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    ensure_peer_network()
     peer_id = str(job.params.get("peer_id") or "")
     approved = bool(job.params.get("approved", True))
     if not peer_id:
