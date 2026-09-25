@@ -6,7 +6,7 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "9964294e8af97cee21814340c29e02244e026ac999f735a67a367e8d89ab55e3",
+    "sha256": "f1bbcb6ef06a7b98695c7f0cfad4387ff73c6dbeb5dca799d1798895975be4d3",
     "widget": "renderer/widget.html",
     "widgetSha256": "8a0c60216122c3038ab212b340bc239ee0c1369f5cb8c3f7e318fe4bcd4a6348"
   },
@@ -15,11 +15,13 @@
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "2c5772b10c3432a67b8905ae0ce36f53867a6f65627e2c3a7802ce774acad37a",
+    "sha256": "dc3cd490e5a33090924bc88c389c86c8e09aef7482a51bae7210a78a2800d212",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
-      "cancellation": true
+      "cancellation": true,
+      "peerDiscovery": true,
+      "ipaValidation": true
     }
   },
   "handoff": {

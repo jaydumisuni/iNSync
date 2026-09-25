@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import plistlib
+import zipfile
 import subprocess
 import sys
 import tempfile
@@ -135,6 +137,84 @@ class EngineProtocolTests(unittest.TestCase):
                 for stream in (proc.stdin, proc.stdout, proc.stderr):
                     if stream is not None:
                         stream.close()
+
+
+    def test_peer_discovery_and_role_configuration(self):
+        proc = self.start_backend()
+        try:
+            self.read(proc)
+            self.send(proc, {"id": 10, "method": "job.submit", "params": {"operation": "peer.list", "params": {}}})
+            job_id = None
+            final = None
+            deadline = time.time() + 10
+            while time.time() < deadline and final is None:
+                msg = self.read(proc)
+                if msg.get("id") == 10:
+                    job_id = msg["result"]["job"]["id"]
+                if job_id and msg.get("event") == "job.finished" and msg["data"]["job"]["id"] == job_id:
+                    final = msg["data"]["job"]
+            self.assertEqual(final["status"], "completed")
+            peers = final["result"]["peers"]
+            self.assertTrue(any(peer.get("self") for peer in peers))
+
+            self.send(proc, {"id": 11, "method": "job.submit", "params": {"operation": "peer.configure", "params": {"role": "provider", "scope": "internet-folders", "shared_paths": []}}})
+            configured = None
+            job_id = None
+            deadline = time.time() + 10
+            while time.time() < deadline and configured is None:
+                msg = self.read(proc)
+                if msg.get("id") == 11:
+                    job_id = msg["result"]["job"]["id"]
+                if job_id and msg.get("event") == "job.finished" and msg["data"]["job"]["id"] == job_id:
+                    configured = msg["data"]["job"]
+            self.assertEqual(configured["status"], "completed")
+            self.assertEqual(configured["result"]["peer"]["role"], "provider")
+            self.assertEqual(configured["result"]["peer"]["scope"], "internet-folders")
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
+                if stream is not None:
+                    stream.close()
+
+    def test_ipa_validation_reads_bundle_metadata(self):
+        with tempfile.TemporaryDirectory(prefix="insync-ipa-test-") as td:
+            ipa = Path(td) / "sample.ipa"
+            info = {
+                "CFBundleDisplayName": "iNSync Test",
+                "CFBundleIdentifier": "com.thetechguy.insync.test",
+                "CFBundleShortVersionString": "1.2.3",
+                "MinimumOSVersion": "15.0",
+            }
+            with zipfile.ZipFile(ipa, "w") as zf:
+                zf.writestr("Payload/Test.app/Info.plist", plistlib.dumps(info))
+                zf.writestr("Payload/Test.app/_CodeSignature/CodeResources", b"proof")
+
+            proc = self.start_backend()
+            try:
+                self.read(proc)
+                self.send(proc, {"id": 20, "method": "job.submit", "params": {"operation": "ios.validate", "params": {"path": str(ipa)}}})
+                job_id = None
+                final = None
+                deadline = time.time() + 10
+                while time.time() < deadline and final is None:
+                    msg = self.read(proc)
+                    if msg.get("id") == 20:
+                        job_id = msg["result"]["job"]["id"]
+                    if job_id and msg.get("event") == "job.finished" and msg["data"]["job"]["id"] == job_id:
+                        final = msg["data"]["job"]
+                self.assertEqual(final["status"], "completed")
+                metadata = final["result"]["metadata"]
+                self.assertEqual(metadata["bundle_id"], "com.thetechguy.insync.test")
+                self.assertEqual(metadata["version"], "1.2.3")
+                self.assertTrue(metadata["signed"])
+            finally:
+                proc.terminate()
+                proc.wait(timeout=5)
+                for stream in (proc.stdin, proc.stdout, proc.stderr):
+                    if stream is not None:
+                        stream.close()
+
 
 
 if __name__ == "__main__":
