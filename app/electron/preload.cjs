@@ -1,6 +1,11 @@
-const { contextBridge, ipcRenderer } = require("electron");
-function sub(channel, cb){ if(typeof cb!=="function") return ()=>{}; const h=(_e,p)=>cb(p); ipcRenderer.on(channel,h); return ()=>ipcRenderer.removeListener(channel,h); }
-contextBridge.exposeInMainWorld("ttg", Object.freeze({
+const {contextBridge,ipcRenderer}=require("electron");
+function sub(channel,cb){
+  if(typeof cb!=="function")return()=>{};
+  const handler=(_e,payload)=>cb(payload);
+  ipcRenderer.on(channel,handler);
+  return()=>ipcRenderer.removeListener(channel,handler);
+}
+contextBridge.exposeInMainWorld("ttg",Object.freeze({
   runtime:()=>ipcRenderer.invoke("insync:runtime"),
   windowControl:(action)=>ipcRenderer.invoke("insync:window",action),
   widgetMinimize:()=>ipcRenderer.invoke("insync:widget:minimize"),
@@ -8,5 +13,20 @@ contextBridge.exposeInMainWorld("ttg", Object.freeze({
   stateGet:()=>ipcRenderer.invoke("insync:state:get"),
   stateSet:(patch)=>ipcRenderer.invoke("insync:state:set",patch||{}),
   onState:(cb)=>sub("insync:state:update",cb),
-  backend:Object.freeze({invoke:(method,params={})=>ipcRenderer.invoke("insync:backend",method,params)})
+  onBackendEvent:(cb)=>sub("insync:backend:event",cb),
+  dialog:Object.freeze({
+    openFiles:(options={})=>ipcRenderer.invoke("insync:dialog:files",options),
+    openFolder:(options={})=>ipcRenderer.invoke("insync:dialog:folder",options)
+  }),
+  clipboard:Object.freeze({
+    readText:()=>ipcRenderer.invoke("insync:clipboard:text"),
+    readImage:()=>ipcRenderer.invoke("insync:clipboard:image")
+  }),
+  backend:Object.freeze({
+    invoke:(method,params={})=>ipcRenderer.invoke("insync:backend",method,params),
+    submit:(operation,params={})=>ipcRenderer.invoke("insync:backend","job.submit",{operation,params}),
+    cancel:(jobId)=>ipcRenderer.invoke("insync:backend","job.cancel",{job_id:jobId}),
+    status:(jobId)=>ipcRenderer.invoke("insync:backend","job.status",{job_id:jobId}),
+    list:()=>ipcRenderer.invoke("insync:backend","job.list",{})
+  })
 }));

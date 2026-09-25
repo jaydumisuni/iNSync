@@ -1,27 +1,276 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>iNSync</title><style>
-:root{--red:#ff647f;--blue:#5fd3ff;--green:#4affaa;--text:#edf8ff;--muted:#9bb7d3}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:var(--text);font-family:Segoe UI,Inter,Arial,sans-serif}button,select,input{font:inherit}#stage{position:fixed;inset:0;background:#000;overflow:hidden}#art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;user-select:none;pointer-events:none}.hotspot{position:absolute;z-index:6;border:0;background:transparent;cursor:pointer;border-radius:28%;outline:none;transition:.18s}.hotspot::after{content:attr(data-label);position:absolute;left:50%;bottom:-5px;transform:translate(-50%,80%);padding:6px 9px;border-radius:999px;background:rgba(5,10,23,.93);border:1px solid rgba(70,190,255,.25);color:#ecfbff;font-size:11px;font-weight:700;white-space:nowrap;opacity:0;pointer-events:none;transition:.18s}.hotspot:hover{filter:drop-shadow(0 0 12px #28d8ff);transform:scale(1.025)}.hotspot:hover::after{opacity:1;transform:translate(-50%,100%)}
-.hs-wifi{left:37.8%;top:0;width:24%;height:19%}.hs-ps{left:18%;top:4%;width:29%;height:27%}.hs-xbox{left:57%;top:3%;width:29%;height:27%}.hs-switch{left:70.7%;top:21.5%;width:29.3%;height:23%}.hs-iphone{left:2.5%;top:22.7%;width:23%;height:25%}.hs-ipa{left:0;top:38.7%;width:19%;height:19%}.hs-android{left:78.1%;top:38.4%;width:21.9%;height:20%}.hs-folder{left:79%;top:54%;width:21%;height:19.5%}.hs-clipboard{left:82.5%;top:69.5%;width:17.5%;height:21%}.hs-pc{left:0;top:70.5%;width:30%;height:21%}.hs-home{left:22%;top:29%;width:56%;height:66%;border-radius:45%;z-index:4}
-.logo{position:absolute;left:42%;bottom:3.8%;width:16%;z-index:8;pointer-events:none;filter:drop-shadow(0 0 16px rgba(65,177,255,.5))}.window-controls{position:absolute;inset:0;z-index:12;pointer-events:none}.win-btn{position:absolute;top:50.5%;width:44px;height:44px;border-radius:16px;border:1px solid rgba(104,184,255,.23);background:linear-gradient(180deg,rgba(17,26,48,.74),rgba(7,12,26,.66));color:#e4f7ff;display:grid;place-items:center;font-size:23px;cursor:pointer;backdrop-filter:blur(14px);box-shadow:0 10px 24px rgba(0,0,0,.34);pointer-events:auto}.win-btn:hover{transform:translateY(-1px);box-shadow:0 14px 30px rgba(0,0,0,.4),0 0 18px rgba(65,177,255,.22)}#minBtn{left:42.3%;padding-bottom:7px}#closeMainBtn{right:42.3%;color:#ffd7df;border-color:rgba(255,100,140,.26);background:linear-gradient(180deg,rgba(54,14,26,.8),rgba(28,7,14,.68))}
-.status-glasses{position:absolute;left:40.4%;top:55.8%;width:19.2%;height:8.8%;z-index:9;pointer-events:none;filter:drop-shadow(0 0 10px currentColor) drop-shadow(0 0 22px currentColor);transition:.2s}.status-glasses.state-disconnected{color:var(--red)}.status-glasses.state-receiving{color:var(--blue)}.status-glasses.state-sending{color:var(--green)}.status-glasses rect{fill:rgba(0,0,0,.78);stroke:currentColor;stroke-width:8}.status-glasses path{fill:none;stroke:currentColor;stroke-width:8;stroke-linecap:round}
-.connection-glass{position:absolute;right:3.5%;bottom:5.5%;z-index:11;width:224px;padding:12px;border-radius:24px;border:1px solid rgba(100,188,255,.18);background:linear-gradient(180deg,rgba(18,27,49,.62),rgba(7,13,27,.54));backdrop-filter:blur(20px);box-shadow:0 18px 44px rgba(0,0,0,.38);display:grid;gap:10px}.glass-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.glass-head{display:grid;gap:1px}.glass-head small{text-transform:uppercase;letter-spacing:.14em;color:#bdd8f3;font-size:9px}.glass-head b{font-size:14px}.glass-mini{width:32px;height:32px;border-radius:11px;border:1px solid rgba(96,183,255,.18);background:rgba(255,255,255,.05);color:#e7f7ff;font-size:20px;cursor:pointer}.glass-select{width:100%;padding:8px 9px;border-radius:13px;border:1px solid rgba(95,183,255,.16);background:#0b1325;color:#edf9ff;outline:none}.glass-pane{display:grid;gap:8px}.glass-pane[hidden]{display:none}.conn-chip{width:100%;padding:10px 11px;border-radius:999px;border:1px solid rgba(146,177,212,.12);background:rgba(255,255,255,.035);color:#dcecff;font-size:11px;font-weight:700;opacity:.54;cursor:pointer;transition:.18s}.conn-chip.active{opacity:1;box-shadow:0 0 18px currentColor}.connection-glass.state-disconnected{border-color:rgba(255,100,127,.28)}.connection-glass.state-receiving{border-color:rgba(95,211,255,.28)}.connection-glass.state-sending{border-color:rgba(74,255,170,.28)}.connection-glass.state-disconnected .disconnected{color:var(--red);border-color:rgba(255,100,127,.48);background:rgba(255,100,127,.16)}.connection-glass.state-receiving .receiving{color:var(--blue);border-color:rgba(95,211,255,.48);background:rgba(95,211,255,.16)}.connection-glass.state-sending .sending{color:var(--green);border-color:rgba(74,255,170,.48);background:rgba(74,255,170,.16)}
-.clip-row{display:flex;align-items:center;justify-content:space-between;font-size:11px}.switch{width:44px;height:25px;border-radius:999px;border:1px solid rgba(96,183,255,.15);background:rgba(255,100,127,.22);position:relative;cursor:pointer}.switch i{position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;transition:.18s}.switch.on{background:rgba(74,255,170,.25)}.switch.on i{left:21px}.quick{display:grid;grid-template-columns:1fr 1fr;gap:7px}.quick button{padding:8px 7px;border-radius:12px;border:1px solid rgba(95,183,255,.14);background:rgba(255,255,255,.04);color:#ecfbff;font-size:10px;font-weight:700;cursor:pointer}.targets{display:grid;gap:5px;font-size:10px;color:#cde7ff}.targets label{display:flex;gap:6px;align-items:center}.targets input{accent-color:#2edfff}
-.backdrop{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.57);backdrop-filter:blur(10px);padding:18px}.backdrop.open{display:flex}.modal{width:min(820px,88vw);height:min(500px,72vh);overflow:hidden;border-radius:26px;background:linear-gradient(180deg,rgba(22,33,59,.58),rgba(5,10,22,.55));border:1px solid rgba(90,190,255,.2);backdrop-filter:blur(25px);box-shadow:0 24px 80px rgba(0,0,0,.58);padding:15px;display:grid;grid-template-rows:auto minmax(0,1fr);transition:.18s}.modal.maximized{width:min(1160px,95vw);height:min(820px,91vh);padding:18px}.modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:10px;border-bottom:1px solid rgba(86,185,255,.11)}.modal-title h2{margin:0;font-size:20px}.modal-title p{margin:3px 0 0;color:var(--muted);font-size:10.5px}.modal.maximized .modal-title h2{font-size:26px}.modal.maximized .modal-title p{font-size:13px}.modal-actions{display:flex;gap:7px}.modal-actions button{width:38px;height:38px;border-radius:13px;border:1px solid rgba(80,180,255,.18);background:rgba(255,255,255,.04);color:#fff;font-size:19px;cursor:pointer}.modal-actions .x{color:#ffdbe4;border-color:rgba(255,100,140,.22);background:rgba(80,18,36,.28)}.modal-body{min-height:0;display:grid;grid-template-columns:1.15fr .85fr;gap:11px;padding-top:11px;overflow:hidden}.modal.maximized .modal-body{gap:15px}.card{min-height:0;overflow:hidden;border:1px solid rgba(83,180,255,.12);background:linear-gradient(180deg,rgba(26,36,62,.4),rgba(9,14,28,.34));border-radius:18px;padding:11px;backdrop-filter:blur(16px)}.card h3{margin:0 0 7px;font-size:14px}.card p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.4}.modal.maximized .card h3{font-size:17px}.modal.maximized .card p{font-size:12.5px}.rows{display:grid;gap:7px;margin-top:9px}.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 9px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid rgba(91,180,255,.08)}.row b{font-size:10.5px}.row small{display:block;color:var(--muted);font-size:9.5px;margin-top:2px}.modal.maximized .row b{font-size:12.5px}.modal.maximized .row small{font-size:11px}.tag{padding:5px 7px;border-radius:999px;font-size:9px;border:1px solid rgba(80,190,255,.18);color:#d8f5ff;background:rgba(51,163,255,.08)}.tag.green{color:#baffd3;border-color:rgba(57,255,145,.24)}.tag.red{color:#ffd3dc;border-color:rgba(255,62,105,.24)}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.field{display:grid;gap:4px}.field label{text-transform:uppercase;letter-spacing:.1em;color:#a5c4e1;font-size:8.5px}.field select,.field input{width:100%;padding:8px;border-radius:11px;border:1px solid rgba(88,180,255,.14);background:#0a1121;color:white;font-size:10px}.buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}.buttons button{border-radius:11px;padding:8px 10px;font-weight:700;cursor:pointer;font-size:10px}.primary{border:0;background:linear-gradient(90deg,#23dfff,#5667ff);color:#00101b}.secondary{background:rgba(255,255,255,.05);color:#e7f7ff;border:1px solid rgba(92,180,255,.14)}#toast{position:fixed;left:50%;bottom:18px;z-index:100;transform:translate(-50%,18px);opacity:0;padding:8px 12px;border-radius:999px;background:rgba(8,15,28,.95);border:1px solid rgba(77,189,255,.24);color:#e7f8ff;font-size:10px;transition:.18s}#toast.show{opacity:1;transform:translate(-50%,0)}@media(max-width:850px){.connection-glass{width:202px;right:2%;bottom:4%}.win-btn{width:38px;height:38px}.modal-body{grid-template-columns:1fr}.card:nth-child(2){display:none}.modal.maximized .card:nth-child(2){display:block}.logo{width:19%;left:40.5%}}
-</style></head><body><div id="stage"><img id="art" src="assets/insync-ui.png" alt=""><img class="logo" src="assets/insync-logo.png" alt="iNSync"><svg id="statusGlasses" class="status-glasses state-receiving" viewBox="0 0 300 110" aria-hidden="true"><rect x="10" y="18" width="118" height="72" rx="31"/><rect x="172" y="18" width="118" height="72" rx="31"/><path d="M128 48 C143 39 157 39 172 48"/></svg><div class="window-controls"><button id="minBtn" class="win-btn" aria-label="Minimize">−</button><button id="closeMainBtn" class="win-btn" aria-label="Close">×</button></div>
-<button class="hotspot hs-wifi" data-module="sharing" data-label="Sharing"></button><button class="hotspot hs-ps" data-module="playstation" data-label="PlayStation"></button><button class="hotspot hs-xbox" data-module="xbox" data-label="Xbox"></button><button class="hotspot hs-switch" data-module="switch" data-label="Switch"></button><button class="hotspot hs-iphone" data-module="iphone" data-label="iPhone / IPA"></button><button class="hotspot hs-ipa" data-module="iphone" data-label="IPA"></button><button class="hotspot hs-android" data-module="android" data-label="Android / ADB"></button><button class="hotspot hs-folder" data-module="files" data-label="File Share"></button><button class="hotspot hs-clipboard" data-module="clipboard" data-label="Clipboard"></button><button class="hotspot hs-pc" data-module="pc" data-label="PC Share"></button><button class="hotspot hs-home" data-module="home" data-label="Home"></button>
-<section id="connectionGlass" class="connection-glass state-receiving"><div class="glass-top"><div class="glass-head"><small>Widget</small><b id="glassTitle">Connection</b></div><button id="glassMin" class="glass-mini" aria-label="Minimize widget">−</button></div><select id="glassMode" class="glass-select"><option value="connection">Connection</option><option value="clipboard">Clipboard</option></select><div class="glass-pane" data-pane="connection"><button class="conn-chip disconnected" data-conn="disconnected">Disconnected</button><button class="conn-chip receiving active" data-conn="receiving">Receiving</button><button class="conn-chip sending" data-conn="sending">Sending</button></div><div class="glass-pane" data-pane="clipboard" hidden><div class="clip-row"><span>Clipboard sharing</span><button id="clipToggle" class="switch on"><i></i></button></div><div class="quick"><button data-clip="text">Paste text</button><button data-clip="image">Send image</button></div><div class="targets"><label><input type="checkbox" checked> KRATOS</label><label><input type="checkbox"> Laptop</label><label><input type="checkbox"> Android</label><label><input type="checkbox"> All approved devices</label></div></div></section></div>
-<div id="backdrop" class="backdrop"><section id="modal" class="modal"><header class="modal-head"><div class="modal-title"><h2 id="modalTitle"></h2><p id="modalSub"></p></div><div class="modal-actions"><button id="maxModal" aria-label="Maximize">▢</button><button id="closeModal" class="x" aria-label="Close">×</button></div></header><div id="modalBody" class="modal-body"></div></section></div><div id="toast"></div><script>
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];let ui={mode:'connection',connection:'receiving',clipboardEnabled:true};
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iNSync</title>
+<style>
+:root{--red:#ff5d7b;--blue:#59ccff;--green:#42f79d;--text:#eef9ff;--muted:#a9bfd6}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--text);font-family:Segoe UI,Inter,Arial,sans-serif}
+button,select,input{font:inherit}
+#stage{position:fixed;inset:0;background:transparent;-webkit-app-region:drag}
+#art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
+.logo{position:absolute;left:42.2%;bottom:3.2%;width:15.6%;height:auto;z-index:8;pointer-events:none;filter:drop-shadow(0 0 14px rgba(75,166,255,.45))}
+.hotspot,.window-btn,.modal,.modal *{-webkit-app-region:no-drag}
+.hotspot{position:absolute;z-index:5;border:0;background:transparent;cursor:pointer;border-radius:30%;outline:none}
+.hotspot::after{content:attr(data-label);position:absolute;left:50%;bottom:0;transform:translate(-50%,75%);opacity:0;pointer-events:none;white-space:nowrap;padding:5px 8px;border-radius:999px;background:rgba(10,18,34,.78);border:1px solid rgba(88,189,255,.18);backdrop-filter:blur(14px);color:#eaf8ff;font-size:10px;font-weight:700;transition:.14s}
+.hotspot:hover{filter:drop-shadow(0 0 11px #34d8ff)}
+.hotspot:hover::after{opacity:1;transform:translate(-50%,100%)}
+.hs-wifi{left:37%;top:0;width:25%;height:18%}.hs-ps{left:18%;top:5%;width:29%;height:27%}.hs-xbox{left:57%;top:4%;width:29%;height:26%}.hs-switch{left:71%;top:22%;width:29%;height:22%}.hs-iphone{left:2%;top:23%;width:23%;height:24%}.hs-ipa{left:0;top:39%;width:19%;height:19%}.hs-android{left:78%;top:39%;width:22%;height:20%}.hs-folder{left:79%;top:54%;width:21%;height:20%}.hs-clipboard{left:82%;top:70%;width:18%;height:20%}.hs-pc{left:0;top:71%;width:30%;height:20%}.hs-home{left:25%;top:31%;width:50%;height:62%;border-radius:46%;z-index:3}
+.window-btn{position:absolute;top:38.3%;z-index:12;width:36px;height:36px;border-radius:13px;border:1px solid rgba(104,184,255,.18);background:linear-gradient(180deg,rgba(16,26,48,.72),rgba(6,12,25,.58));backdrop-filter:blur(14px);color:#e9f8ff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,.32);font-size:20px}
+.window-btn:hover{transform:translateY(-1px);box-shadow:0 12px 30px rgba(0,0,0,.36),0 0 15px rgba(79,185,255,.18)}
+#minBtn{left:28.5%;padding-bottom:6px}#closeBtn{right:28.5%;color:#ffdbe4;border-color:rgba(255,92,124,.22);background:linear-gradient(180deg,rgba(56,14,29,.72),rgba(29,7,15,.58))}
+.backdrop{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.22);backdrop-filter:blur(8px);-webkit-app-region:no-drag}
+.backdrop.open{display:flex}
+.modal{width:min(690px,84vw);height:min(420px,61vh);overflow:hidden;border-radius:24px;border:1px solid rgba(91,190,255,.18);background:linear-gradient(180deg,rgba(20,31,54,.7),rgba(6,12,25,.66));backdrop-filter:blur(26px);box-shadow:0 24px 70px rgba(0,0,0,.48);padding:13px;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:9px;transition:.16s}
+.modal.max{width:min(800px,95vw);height:min(650px,90vh);padding:16px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:9px;border-bottom:1px solid rgba(95,185,255,.11)}
+.modal-copy h2{margin:0;font-size:18px}.modal-copy p{margin:3px 0 0;color:var(--muted);font-size:10px}.modal.max .modal-copy h2{font-size:24px}.modal.max .modal-copy p{font-size:12px}
+.modal-actions{display:flex;gap:7px}.modal-actions button{width:36px;height:36px;border-radius:12px;border:1px solid rgba(83,178,255,.15);background:rgba(255,255,255,.04);color:#fff;cursor:pointer;font-size:18px}.modal-actions .x{color:#ffdbe4;border-color:rgba(255,92,124,.2);background:rgba(70,17,34,.25)}
+.modal-body{min-height:0;display:grid;grid-template-columns:1.15fr .85fr;gap:9px;overflow:hidden}
+.card{min-height:0;overflow:hidden;border-radius:17px;border:1px solid rgba(91,181,255,.1);background:rgba(13,22,40,.42);padding:10px;display:flex;flex-direction:column}
+.card h3{margin:0 0 7px;font-size:13px}.card p{margin:0;color:var(--muted);font-size:9.5px;line-height:1.42}.modal.max .card h3{font-size:16px}.modal.max .card p{font-size:11.5px}
+.rows{display:grid;gap:6px;margin-top:8px}.row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px;border-radius:12px;border:1px solid rgba(89,180,255,.08);background:rgba(255,255,255,.025)}.row b{font-size:9.5px}.row small{display:block;margin-top:2px;color:var(--muted);font-size:8.5px}.modal.max .row b{font-size:11.5px}.modal.max .row small{font-size:10px}
+.tag{padding:4px 7px;border-radius:999px;border:1px solid rgba(87,190,255,.17);font-size:8px;color:#dcf6ff;background:rgba(74,167,255,.06)}.tag.green{color:#c3ffdc;border-color:rgba(66,247,157,.22)}.tag.red{color:#ffd2db;border-color:rgba(255,93,123,.22)}.tag.blue{color:#c9efff;border-color:rgba(89,204,255,.24)}
+.field{display:grid;gap:4px;margin-top:7px}.field label{font-size:8px;text-transform:uppercase;letter-spacing:.09em;color:#a8c2dc}.field select,.field input{width:100%;padding:7px 8px;border-radius:10px;border:1px solid rgba(88,180,255,.12);background:#0b1324;color:#fff;font-size:9px;outline:none}
+.buttons{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.buttons button{padding:7px 9px;border-radius:10px;font-size:9px;font-weight:700;cursor:pointer}.primary{border:0;background:linear-gradient(90deg,#25dcff,#5968ff);color:#001019}.secondary{border:1px solid rgba(88,180,255,.12);background:rgba(255,255,255,.04);color:#eaf8ff}.danger{border:1px solid rgba(255,93,123,.2);background:rgba(255,93,123,.09);color:#ffd5dd}
+.pathbox{margin-top:7px;padding:7px 8px;border-radius:11px;border:1px dashed rgba(90,181,255,.16);background:rgba(0,0,0,.12);font-size:8.5px;color:#d9edff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.split2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.mini-list{display:grid;gap:5px;margin-top:7px}.mini-item{padding:6px 7px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid rgba(90,180,255,.07);font-size:8.5px;color:#dbeeff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jobdock{display:none;align-items:center;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:8px 9px;border-radius:14px;border:1px solid rgba(89,190,255,.12);background:rgba(8,16,30,.62)}
+.jobdock.show{display:grid}.jobmeta{min-width:0}.jobline{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:8.5px;color:#d9edff}.jobline span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.progress{height:6px;margin-top:5px;border-radius:999px;background:rgba(255,255,255,.05);overflow:hidden}.progress i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#27dfff,#5f74ff);border-radius:999px;transition:width .15s}.cancel{padding:6px 8px;border-radius:9px;border:1px solid rgba(255,93,123,.18);background:rgba(255,93,123,.08);color:#ffd7df;font-size:8px;cursor:pointer}
+#toast{position:fixed;left:50%;bottom:12px;z-index:80;transform:translate(-50%,16px);opacity:0;padding:7px 10px;border-radius:999px;background:rgba(9,17,31,.9);border:1px solid rgba(82,189,255,.2);color:#e9f8ff;font-size:9px;transition:.16s;-webkit-app-region:no-drag}#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <img id="art" src="assets/insync-ui-disconnected.png" alt="">
+  <img class="logo" src="assets/insync-logo-transparent.png" alt="iNSync">
+  <button id="minBtn" class="window-btn" aria-label="Minimize">−</button>
+  <button id="closeBtn" class="window-btn" aria-label="Close">×</button>
+  <button class="hotspot hs-wifi" data-module="sharing" data-label="Sharing"></button>
+  <button class="hotspot hs-ps" data-module="playstation" data-label="PlayStation"></button>
+  <button class="hotspot hs-xbox" data-module="xbox" data-label="Xbox"></button>
+  <button class="hotspot hs-switch" data-module="switch" data-label="Switch"></button>
+  <button class="hotspot hs-iphone" data-module="iphone" data-label="iPhone / IPA"></button>
+  <button class="hotspot hs-ipa" data-module="iphone" data-label="IPA"></button>
+  <button class="hotspot hs-android" data-module="android" data-label="Android / APK"></button>
+  <button class="hotspot hs-folder" data-module="files" data-label="File Share"></button>
+  <button class="hotspot hs-clipboard" data-module="clipboard" data-label="Clipboard"></button>
+  <button class="hotspot hs-pc" data-module="pc" data-label="PC Share"></button>
+  <button class="hotspot hs-home" data-module="home" data-label="Home"></button>
+</div>
+
+<div id="backdrop" class="backdrop">
+  <section id="modal" class="modal">
+    <header class="modal-head">
+      <div class="modal-copy"><h2 id="modalTitle"></h2><p id="modalSub"></p></div>
+      <div class="modal-actions"><button id="maxModal" aria-label="Maximize">▢</button><button id="closeModal" class="x" aria-label="Close">×</button></div>
+    </header>
+    <div id="modalBody" class="modal-body"></div>
+    <div id="jobDock" class="jobdock">
+      <div class="jobmeta"><div class="jobline"><span id="jobMessage">Ready</span><span id="jobPct">0%</span></div><div class="progress"><i id="jobBar"></i></div></div>
+      <button id="cancelJob" class="cancel">Cancel</button>
+    </div>
+  </section>
+</div>
+<div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let state={connection:"disconnected",mode:"connection",clipboardEnabled:true};
+let currentModule="home";
+let activeJob="";
+const artByState={disconnected:"assets/insync-ui-disconnected.png",receiving:"assets/insync-ui-receiving.png",sending:"assets/insync-ui-sending.png"};
+const data={
+  files:{sources:[],destination:""},
+  pc:{sources:[],destination:"",peers:[]},
+  android:{devices:[],serial:"",apk:"",apps:[],app:""},
+  iphone:{ipa:"",devices:[]},
+  playstation:{paths:[]},
+  xbox:{paths:[]},
+  switch:{paths:[]},
+  clipboard:{peers:[],targets:[]},
+  sharing:{status:null}
+};
+
+function esc(v){return String(v??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function toast(t){const n=$("#toast");n.textContent=t;n.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>n.classList.remove("show"),1400)}
+function apply(s){state={...state,...s};$("#art").src=artByState[state.connection]||artByState.disconnected}
+function rows(items){return '<div class="rows">'+items.map(x=>'<div class="row"><div><b>'+esc(x[0])+'</b><small>'+esc(x[1])+'</small></div><span class="tag '+(x[3]||'')+'">'+esc(x[2])+'</span></div>').join('')+'</div>'}
+function pathBox(label,value){return '<div class="field"><label>'+label+'</label><div class="pathbox">'+esc(value||"Not selected")+'</div></div>'}
+function shortList(items){return '<div class="mini-list">'+(items.length?items.slice(0,4).map(x=>'<div class="mini-item">'+esc(x)+'</div>').join(''):'<div class="mini-item">Nothing selected</div>')+'</div>'}
+function optionList(items,valueFn,labelFn,selected){return items.map(x=>{const v=valueFn(x),l=labelFn(x);return '<option value="'+esc(v)+'" '+(v===selected?'selected':'')+'>'+esc(l)+'</option>'}).join('')}
+
 const modules={
-home:{title:'iNSync',sub:'Local transport, sharing and device bridge.',left:'<h3>Quick status</h3><div class="rows"><div class="row"><div><b>Transport core</b><small>One routed core, capability-gated adapters.</small></div><span class="tag green">Ready</span></div><div class="row"><div><b>Android</b><small>ADB + APK + app management in one surface.</small></div><span class="tag">Unified</span></div><div class="row"><div><b>iPhone</b><small>IPA actions stay signing/provisioning aware.</small></div><span class="tag">Gated</span></div><div class="row"><div><b>Clipboard widget</b><small>Selective text/image routing to approved peers.</small></div><span class="tag green">On</span></div></div>',right:'<h3>Design law</h3><p>Discovery is identity-based. Pairing is explicit. Internet routing and local payload transport are separate capabilities.</p>'},
-sharing:{title:'Sharing',sub:'Normal networking ↔ Internet sharing with deterministic rollback.',left:'<h3>Sharing</h3><div class="grid2"><div class="field"><label>Internet source</label><select><option>Auto-detect</option><option>Wi-Fi</option><option>Ethernet</option></select></div><div class="field"><label>Share to</label><select><option>Ethernet</option><option>Wi-Fi LAN / hotspot</option></select></div></div><div class="rows"><div class="row"><div><b>Mode</b><small>Baseline → apply → verify → restore.</small></div><span class="tag green">Sharing</span></div><div class="row"><div><b>Private LAN</b><small>Custom non-conflicting subnet.</small></div><span class="tag">Managed</span></div></div><div class="buttons"><button class="primary" data-action="sharing.toggle">Toggle Sharing</button><button class="secondary" data-action="sharing.status">Check state</button></div>',right:'<h3>Transport</h3><p>Provider can be Wi-Fi or Ethernet. Receiver can be Ethernet or supported Wi-Fi LAN/hotspot. Local transport remains independent of Internet reachability.</p>'},
-pc:{title:'PC Share',sub:'Choose provider/receiver roles and shared scope.',left:'<h3>Peers</h3><div class="rows"><div class="row"><div><b>ATHENA</b><small>Internet provider</small></div><span class="tag green">Provider</span></div><div class="row"><div><b>KRATOS</b><small>Receiving / paired</small></div><span class="tag">Receiver</span></div><div class="row"><div><b>Other peer</b><small>Approval required</small></div><span class="tag red">Idle</span></div></div><div class="field" style="margin-top:8px"><label>Share scope</label><select><option>Internet only</option><option>Files only</option><option>Internet + Files</option><option>Selected folder/location</option><option>Whole PC (explicit)</option></select></div>',right:'<h3>Policy</h3><p>Peer authentication precedes file or clipboard exchange. “All devices” means all approved iNSync peers only.</p>'},
-files:{title:'File Share',sub:'Explorer-style local transfers with storage and resume awareness.',left:'<h3>Transfer</h3><div class="grid2"><div class="field"><label>Source</label><input value="Choose file or folder"></div><div class="field"><label>Destination</label><select><option>Selected peer</option><option>Android</option><option>Console</option></select></div></div><div class="rows"><div class="row"><div><b>Free space</b><small>Queried before transfer.</small></div><span class="tag green">OK</span></div><div class="row"><div><b>Interrupted transfer</b><small>Resume from verified offset.</small></div><span class="tag">Resume</span></div></div>',right:'<h3>Drop routing</h3><p>Ordinary files use file transport. APK/IPA/PKG payloads route only to endpoints advertising the matching capability.</p>'},
-clipboard:{title:'Clipboard',sub:'Selective text and image exchange.',left:'<h3>Clipboard</h3><div class="rows"><div class="row"><div><b>Text</b><small>Two-way or send/receive only.</small></div><span class="tag green">On</span></div><div class="row"><div><b>Images</b><small>Explicit selection / ask before receiving.</small></div><span class="tag">Selective</span></div><div class="row"><div><b>Targets</b><small>One peer or all approved peers.</small></div><span class="tag">Paired</span></div></div><div class="buttons"><button class="primary" data-action="clipboard.text">Paste text</button><button class="secondary" data-action="clipboard.image">Send image</button></div>',right:'<h3>Privacy boundary</h3><p>Clipboard types are opt-in independently. Unknown LAN devices never receive clipboard content.</p>'},
-android:{title:'Android / ADB',sub:'APK install and application management.',left:'<h3>Android</h3><div class="rows"><div class="row"><div><b>ADB device</b><small>USB or approved TCP endpoint.</small></div><span class="tag">Detect</span></div><div class="row"><div><b>Applications</b><small>User/system classification before actions.</small></div><span class="tag">List</span></div></div><div class="buttons"><button class="primary" data-action="adb.install">Install APK</button><button class="secondary" data-action="adb.apps">List Apps</button><button class="secondary" data-action="adb.devices">Refresh</button></div>',right:'<h3>Safe app actions</h3><p>User apps: launch, backup APK, uninstall. System apps expose disable or uninstall-for-user only when Android supports it.</p>'},
-iphone:{title:'iPhone / IPA',sub:'Capability-aware IPA sideload and device transport.',left:'<h3>iPhone</h3><div class="rows"><div class="row"><div><b>Device</b><small>USB/device-service discovery.</small></div><span class="tag">Detect</span></div><div class="row"><div><b>IPA</b><small>Validate signing and provisioning first.</small></div><span class="tag">Check</span></div></div><div class="buttons"><button class="primary" data-action="ios.ipa">Select IPA</button><button class="secondary" data-action="ios.status">Device status</button></div>',right:'<h3>Capability law</h3><p>No fake universal install path. Unsupported signing, developer-mode or device-service states are shown explicitly.</p>'},
-playstation:{title:'PlayStation / PKG',sub:'Browse, transfer, storage and install queue.',left:'<h3>PKG installer</h3><div class="grid2"><div class="field"><label>Packages</label><input value="Choose .pkg files"></div><div class="field"><label>Console</label><select><option>Auto-detect</option></select></div></div><div class="rows"><div class="row"><div><b>Console storage</b><small>Free space checked before queue.</small></div><span class="tag">Query</span></div><div class="row"><div><b>Install transport</b><small>Firmware/device adapter required.</small></div><span class="tag">Gated</span></div></div>',right:'<h3>Queue</h3><p>Transfer and install are separate stages. Package transport is enabled only when the console advertises a qualified backend.</p>'},
-xbox:{title:'Xbox',sub:'Console transport surface.',left:'<h3>Xbox</h3><div class="rows"><div class="row"><div><b>Discovery</b><small>Identity and capabilities.</small></div><span class="tag">Detect</span></div><div class="row"><div><b>Storage</b><small>Destination capacity.</small></div><span class="tag">Query</span></div><div class="row"><div><b>Packages</b><small>Adapter-specific actions.</small></div><span class="tag">Gated</span></div></div>',right:'<h3>Shared UX</h3><p>The backend differs by console; discovery, storage, queue and transfer language stay consistent.</p>'},
-switch:{title:'Nintendo Switch',sub:'Console transfer and storage surface.',left:'<h3>Switch</h3><div class="rows"><div class="row"><div><b>Discovery</b><small>Paired local endpoint.</small></div><span class="tag">Detect</span></div><div class="row"><div><b>Transfer</b><small>Capability-routed content.</small></div><span class="tag">Gated</span></div><div class="row"><div><b>Storage</b><small>Free space and target.</small></div><span class="tag">Query</span></div></div>',right:'<h3>Adapter boundary</h3><p>Only qualified Switch operations appear. Generic file transfer remains available independently when permitted.</p>'}}
-function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('show');clearTimeout(window.__t);window.__t=setTimeout(()=>n.classList.remove('show'),1500)}function applyState(s){ui={...ui,...s};$('#glassMode').value=ui.mode;$('#glassTitle').textContent=ui.mode==='clipboard'?'Clipboard':'Connection';$$('.glass-pane').forEach(p=>p.hidden=p.dataset.pane!==ui.mode);const g=$('#connectionGlass');g.className='connection-glass state-'+ui.connection;$$('.conn-chip').forEach(b=>b.classList.toggle('active',b.dataset.conn===ui.connection));$('#statusGlasses').className='status-glasses state-'+ui.connection;$('#clipToggle').classList.toggle('on',!!ui.clipboardEnabled)}async function setState(p){ui={...ui,...p};applyState(ui);try{await window.ttg?.stateSet?.(p)}catch{}}function openModule(k){const m=modules[k];if(!m)return;$('#modalTitle').textContent=m.title;$('#modalSub').textContent=m.sub;$('#modalBody').innerHTML='<div class="card">'+m.left+'</div><div class="card">'+m.right+'</div>';$('#backdrop').classList.add('open');wireActions()}function wireActions(){$$('[data-action]').forEach(b=>b.onclick=async()=>{const a=b.dataset.action;try{const r=await window.ttg?.backend?.invoke(a,{});toast(r?.message||a+' complete')}catch(e){toast(e.message||'Unavailable')}})}
-$$('.hotspot').forEach(b=>b.onclick=()=>openModule(b.dataset.module));$$('.conn-chip').forEach(b=>b.onclick=()=>setState({connection:b.dataset.conn}));$('#glassMode').onchange=e=>setState({mode:e.target.value});$('#clipToggle').onclick=()=>setState({clipboardEnabled:!ui.clipboardEnabled});$$('[data-clip]').forEach(b=>b.onclick=()=>toast(b.dataset.clip==='text'?'Text ready for selected peers':'Image ready for selected peers'));$('#glassMin').onclick=()=>window.ttg?.widgetMinimize?.();$('#minBtn').onclick=()=>window.ttg?.windowControl?.('minimize');$('#closeMainBtn').onclick=()=>window.ttg?.windowControl?.('close');$('#closeModal').onclick=()=>$('#backdrop').classList.remove('open');$('#maxModal').onclick=()=>{const m=$('#modal');m.classList.toggle('maximized');$('#maxModal').textContent=m.classList.contains('maximized')?'❐':'▢'};$('#backdrop').onclick=e=>{if(e.target.id==='backdrop')e.currentTarget.classList.remove('open')};document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#backdrop').classList.remove('open')});(async()=>{try{const s=await window.ttg?.stateGet?.();if(s)applyState(s)}catch{};window.ttg?.onState?.(applyState);applyState(ui)})();
-</script></body></html>
+  home:{
+    title:"iNSync",sub:"One transport core; the UI only submits work to the engine.",
+    render(){return [
+      '<div class="card"><h3>Engine</h3>'+rows([
+        ["UI thread","Only selection, state and progress rendering.","Non-blocking","green"],
+        ["Job workers","Transport/device operations run out of process.","2 workers","blue"],
+        ["Cancellation","Running jobs can be stopped from the popup.","Enabled","green"]
+      ])+'<div class="buttons"><button class="secondary" data-cmd="engineSnapshot">Refresh engine</button></div></div>',
+      '<div class="card"><h3>Capability routing</h3><p>ADB and local/network file-copy paths are live. Windows sharing is bound behind an elevated engine job. iOS and console actions only activate when their qualified adapter exists.</p></div>'
+    ]}
+  },
+  sharing:{
+    title:"Sharing",sub:"Normal networking ↔ Internet sharing. Runs in the engine; Windows approval only when a mutation needs elevation.",
+    render(){
+      const s=data.sharing.status||{};
+      const on=state.connection==="sending";
+      return [
+        '<div class="card"><h3>Internet Sharing</h3>'+rows([
+          ["State",s.message||"Read current state",""+(on?"Sharing":"Off"),on?"green":"red"],
+          ["Private side",s.ethernetIPv4||"Ethernet",""+(s.ethernetStatus||"Unknown"),""],
+          ["Uplink",s.wifiIPv4||"Wi-Fi",s.wifiGateway?"Gateway "+s.wifiGateway:"Auto",""]
+        ])+'<div class="split2"><div class="field"><label>Internet source</label><select id="sharePublic"><option>Wi-Fi</option><option>Ethernet</option></select></div><div class="field"><label>Share to</label><select id="sharePrivate"><option>Ethernet</option><option>Wi-Fi</option></select></div></div><div class="buttons"><button class="secondary" data-cmd="sharingRefresh">Refresh</button><button class="primary" data-cmd="sharingToggle">'+(on?"Back to normal":"Start sharing")+'</button></div></div>',
+        '<div class="card"><h3>Contract</h3><p>iNSync captures the private-side baseline, clears stale ICS flags, applies the private gateway, verifies the public/private pair, and restores the saved baseline when sharing is disabled.</p></div>'
+      ]
+    }
+  },
+  pc:{
+    title:"PC Share",sub:"Use local, mapped or UNC destinations now; approved iNSync peer discovery plugs into the same engine contract.",
+    render(){
+      return [
+        '<div class="card"><h3>Send / Receive</h3>'+pathBox("Source",data.pc.sources.join(" • ")) + pathBox("Destination",data.pc.destination) + '<div class="buttons"><button class="secondary" data-cmd="pcFiles">Choose files</button><button class="secondary" data-cmd="pcFolder">Choose source folder</button><button class="secondary" data-cmd="pcDestination">Choose destination</button><button class="primary" data-cmd="pcTransfer">Transfer</button></div></div>',
+        '<div class="card"><h3>Approved peers</h3>'+shortList(data.pc.peers.map(x=>x.name||x.host||x.id))+'<div class="buttons"><button class="secondary" data-cmd="peerRefresh">Refresh peers</button></div><p style="margin-top:7px">Until pairing is qualified, mapped drives and UNC paths remain usable without pretending an unapproved LAN device is trusted.</p></div>'
+      ]
+    }
+  },
+  files:{
+    title:"File Share",sub:"Explorer selection in the UI; copy/receive work and progress run in the engine.",
+    render(){return [
+      '<div class="card"><h3>Explorer</h3>'+pathBox("Source",data.files.sources.join(" • "))+pathBox("Destination",data.files.destination)+'<div class="buttons"><button class="secondary" data-cmd="filesChoose">Choose files</button><button class="secondary" data-cmd="filesChooseFolder">Choose folder</button><button class="secondary" data-cmd="filesDestination">Destination</button><button class="primary" data-cmd="filesTransfer">Start transfer</button></div></div>',
+      '<div class="card"><h3>Selected</h3>'+shortList(data.files.sources)+'<p style="margin-top:7px">The engine scans the copy plan, streams progress, supports cancellation, and works with normal folders, mapped drives and UNC paths.</p></div>'
+    ]}
+  },
+  clipboard:{
+    title:"Clipboard",sub:"Text and images are selected in Electron, but peer delivery is an engine job.",
+    render(){return [
+      '<div class="card"><h3>Clipboard Send</h3>'+rows([
+        ["Text","Read the current clipboard and send to selected approved peers.","Ready","green"],
+        ["Image","Read the current clipboard image and send selectively.","Ready","blue"]
+      ])+'<div class="buttons"><button class="primary" data-cmd="clipText">Paste text</button><button class="secondary" data-cmd="clipImage">Send image</button></div></div>',
+      '<div class="card"><h3>Targets</h3>'+shortList(data.clipboard.peers.map(x=>x.name||x.host||x.id))+'<div class="buttons"><button class="secondary" data-cmd="clipPeers">Refresh peers</button></div><p style="margin-top:7px">No unknown LAN device is treated as approved. Pairing/approval is the next transport adapter boundary.</p></div>'
+    ]}
+  },
+  android:{
+    title:"Android / ADB",sub:"Device discovery, APK install and app management all run in the engine.",
+    render(){
+      const devices=data.android.devices;
+      const apps=data.android.apps;
+      return [
+        '<div class="card"><h3>Android Device</h3><div class="field"><label>ADB device</label><select id="adbDevice"><option value="">Auto / first device</option>'+optionList(devices,x=>x.serial,x=>x.serial+" · "+x.state,data.android.serial)+'</select></div>'+pathBox("APK",data.android.apk)+'<div class="buttons"><button class="secondary" data-cmd="adbRefresh">Refresh devices</button><button class="secondary" data-cmd="apkBrowse">Choose APK</button><button class="primary" data-cmd="apkInstall">Install APK</button></div></div>',
+        '<div class="card"><h3>Applications</h3><div class="field"><label>User app</label><select id="adbApp"><option value="">Choose app</option>'+apps.map(a=>'<option value="'+esc(a)+'" '+(a===data.android.app?'selected':'')+'>'+esc(a)+'</option>').join('')+'</select></div><div class="buttons"><button class="secondary" data-cmd="appsRefresh">List apps</button><button class="danger" data-cmd="appUninstall">Uninstall</button></div><p style="margin-top:7px">System-app destructive actions are not exposed by this screen.</p></div>'
+      ]
+    }
+  },
+  iphone:{
+    title:"iPhone / IPA",sub:"Uses libimobiledevice/ideviceinstaller when present; otherwise the capability stays gated.",
+    render(){return [
+      '<div class="card"><h3>iPhone</h3>'+pathBox("IPA",data.iphone.ipa)+'<div class="buttons"><button class="secondary" data-cmd="iosStatus">Device status</button><button class="secondary" data-cmd="ipaBrowse">Choose IPA</button><button class="primary" data-cmd="ipaInstall">Install IPA</button></div></div>',
+      '<div class="card"><h3>Capability</h3><p>Signing, provisioning and device-service requirements are checked by the backend. Unsupported states are reported instead of using a fake universal install path.</p></div>'
+    ]}
+  },
+  playstation:{title:"PlayStation / PKG",sub:"Package selection and queue UI are live; the console-specific install adapter remains capability-gated.",render(){return consoleRender("playstation","PlayStation",["pkg"])}},
+  xbox:{title:"Xbox",sub:"Shared storage/transfer workflow; backend actions stay console-specific.",render(){return consoleRender("xbox","Xbox",["appx","msix","zip"])}},
+  switch:{title:"Nintendo Switch",sub:"Shared storage/transfer workflow; backend actions stay console-specific.",render(){return consoleRender("switch","Nintendo Switch",["nsp","xci","zip"])}}
+};
+
+function consoleRender(key,label,extensions){
+  const d=data[key];
+  return [
+    '<div class="card"><h3>'+label+'</h3>'+pathBox("Packages",d.paths.join(" • "))+'<div class="buttons"><button class="secondary" data-console="'+key+'" data-ext="'+extensions.join(",")+'" data-cmd="consoleBrowse">Choose package</button><button class="secondary" data-console="'+key+'" data-cmd="consoleStatus">Check console</button><button class="primary" data-console="'+key+'" data-cmd="consoleInstall">Queue install</button></div></div>',
+    '<div class="card"><h3>Backend boundary</h3><p>Package selection is functional now. Install/storage operations only become active when the corresponding qualified console adapter is present.</p></div>'
+  ]
+}
+
+function renderModule(){
+  const m=modules[currentModule]||modules.home;
+  $("#modalTitle").textContent=m.title;$("#modalSub").textContent=m.sub;
+  const parts=m.render();
+  $("#modalBody").innerHTML=parts.join("");
+  wireControls();
+}
+function openModule(key){currentModule=key;renderModule();$("#backdrop").classList.add("open");if(key==="sharing")submit("sharing.status",{},null,true);if(key==="android")submit("adb.devices",{},null,true);if(key==="pc"||key==="clipboard")submit("peer.list",{},null,true)}
+function setJob(job){
+  activeJob=job?.id||"";
+  const dock=$("#jobDock");
+  if(!job){dock.classList.remove("show");return}
+  dock.classList.add("show");$("#jobMessage").textContent=job.message||job.operation||"Working";$("#jobPct").textContent=Math.round(job.progress||0)+"%";$("#jobBar").style.width=(job.progress||0)+"%";$("#cancelJob").style.display=["queued","running"].includes(job.status)?"block":"none";
+}
+async function submit(operation,params={},context=null,quiet=false){
+  try{
+    const r=await window.ttg.backend.submit(operation,params);
+    if(!r?.job)throw new Error(r?.message||"Engine did not return a job");
+    r.job.context=context;
+    jobs.set(r.job.id,{context,operation});
+    setJob(r.job);
+    if(!quiet)toast("Queued: "+operation);
+    return r.job.id;
+  }catch(e){toast(e.message||"Engine unavailable");return ""}
+}
+const jobs=new Map();
+function handleFinished(job){
+  const meta=jobs.get(job.id)||{};
+  jobs.delete(job.id);
+  setJob(job);
+  const r=job.result||{};
+  if(job.status==="completed")toast(r.message||job.message||"Completed");else if(job.status==="cancelled")toast("Cancelled");else toast(r.message||job.error||job.message||"Failed");
+  if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){data.sharing.status=r.status||r; if((r.status||r).connection)apply({connection:(r.status||r).connection});}
+  if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;}
+  if(job.operation==="adb.apps"){data.android.apps=r.apps||[];if(data.android.apps.length&&!data.android.app)data.android.app=data.android.apps[0];}
+  if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[];}
+  if(job.operation==="ios.status"){data.iphone.devices=r.devices||[];}
+  if($("#backdrop").classList.contains("open"))renderModule();
+}
+window.ttg.onBackendEvent(evt=>{
+  if(!evt)return;
+  const job=evt.job;
+  if((evt.type==="job.progress"||evt.type==="job.queued")&&job){if(job.id===activeJob)setJob(job)}
+  if(evt.type==="job.finished"&&job)handleFinished(job);
+});
+
+function wireControls(){
+  const adbDevice=$("#adbDevice");if(adbDevice)adbDevice.onchange=e=>data.android.serial=e.target.value;
+  const adbApp=$("#adbApp");if(adbApp)adbApp.onchange=e=>data.android.app=e.target.value;
+  $$("[data-cmd]").forEach(b=>b.onclick=()=>command(b.dataset.cmd,b));
+}
+async function command(cmd,b){
+  if(cmd==="engineSnapshot"){const r=await window.ttg.backend.invoke("app.snapshot",{});toast(r.message||"Engine ready");return}
+  if(cmd==="sharingRefresh"){submit("sharing.status",{},null,true);return}
+  if(cmd==="sharingToggle"){submit("sharing.toggle",{enable:state.connection!=="sending",public:$("#sharePublic")?.value||"Wi-Fi",private:$("#sharePrivate")?.value||"Ethernet"});return}
+  if(cmd==="filesChoose"||cmd==="pcFiles"){const r=await window.ttg.dialog.openFiles({title:"Choose files",multi:true});if(!r.canceled){data[cmd==="pcFiles"?"pc":"files"].sources=r.paths;renderModule()}return}
+  if(cmd==="filesChooseFolder"||cmd==="pcFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose source folder"});if(!r.canceled){data[cmd==="pcFolder"?"pc":"files"].sources=[r.path];renderModule()}return}
+  if(cmd==="filesDestination"||cmd==="pcDestination"){const r=await window.ttg.dialog.openFolder({title:"Choose destination"});if(!r.canceled){data[cmd==="pcDestination"?"pc":"files"].destination=r.path;renderModule()}return}
+  if(cmd==="filesTransfer"||cmd==="pcTransfer"){const d=data[cmd==="pcTransfer"?"pc":"files"];submit("files.copy",{sources:d.sources,destination:d.destination});return}
+  if(cmd==="peerRefresh"||cmd==="clipPeers"){submit("peer.list",{},null,true);return}
+  if(cmd==="clipText"){const c=await window.ttg.clipboard.readText();submit("clipboard.text",{text:c.text,targets:data.clipboard.targets});return}
+  if(cmd==="clipImage"){const c=await window.ttg.clipboard.readImage();submit("clipboard.image",{data_url:c.dataUrl,targets:data.clipboard.targets});return}
+  if(cmd==="adbRefresh"){submit("adb.devices",{},null,true);return}
+  if(cmd==="apkBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose APK",multi:false,filters:[{name:"Android APK",extensions:["apk","apks","xapk"]}]});if(!r.canceled){data.android.apk=r.paths[0]||"";renderModule()}return}
+  if(cmd==="apkInstall"){submit("adb.install",{path:data.android.apk,serial:data.android.serial});return}
+  if(cmd==="appsRefresh"){submit("adb.apps",{serial:data.android.serial});return}
+  if(cmd==="appUninstall"){if(!data.android.app){toast("Choose an app");return}submit("adb.uninstall",{package:data.android.app,serial:data.android.serial});return}
+  if(cmd==="iosStatus"){submit("ios.status",{});return}
+  if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.iphone.ipa=r.paths[0]||"";renderModule()}return}
+  if(cmd==="ipaInstall"){submit("ios.ipa",{path:data.iphone.ipa});return}
+  if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
+  if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console});return}
+  if(cmd==="consoleInstall"){const key=b.dataset.console;submit("console.pkg",{console:key,paths:data[key].paths});return}
+}
+
+$$(".hotspot").forEach(b=>b.onclick=()=>openModule(b.dataset.module));
+$("#minBtn").onclick=()=>window.ttg.windowControl("minimize");
+$("#closeBtn").onclick=()=>window.ttg.windowControl("close");
+$("#closeModal").onclick=()=>$("#backdrop").classList.remove("open");
+$("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("max");$("#maxModal").textContent=m.classList.contains("max")?"❐":"▢"};
+$("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
+$("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#backdrop").classList.remove("open")});
+(async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(apply);apply(state)})();
+</script>
+</body>
+</html>

@@ -1,27 +1,68 @@
-# iNSync test status — 2026-09-25
+# iNSync test status - 2026-09-25
 
 ## Proved
 
-- Patrol: registered project root.
-- Electron renderer/preload/main syntax checks pass.
-- Python sidecar compiles and responds to the app.snapshot RPC.
-- Builder-owned Linux DEB packaging completes.
-- Fresh-install runtime permissions are usable by a normal desktop user.
-- KRATOS package launches.
-- Main window -> minimized widget -> main window transition is proved.
-- Connection colors are bound to one shared state contract: red disconnected, blue receiving, green sending.
+- Patrol: iNSync is a registered project root.
+- Patrol: THETECHGUY Software Builder remains Builder-owned.
+- Electron main/preload/sidecar JavaScript syntax: PASS.
+- Main renderer JavaScript syntax: PASS.
+- Widget renderer JavaScript syntax: PASS.
+- Python engine compile: PASS.
+- Product unittest suite: 5/5 PASS.
+- JSONL sidecar event bridge: PASS.
+- Engine startup event: PASS.
+- Job queue submission latency proof: 0.43 ms in local engine proof.
+- File copy job: byte-identical result PASS.
+- Job cancellation: PASS on an in-flight 256 MB copy proof.
+- ADB capability detected on ATHENA.
+- ADB device refresh through queued engine job: PASS.
+- Read-only Windows sharing status through engine: PASS.
+- Live sharing state resolved as Wi-Fi public -> Ethernet private.
+- Main renderer contains no child_process, subprocess, PowerShell, or ADB execution path.
+- Minimized widget is a separate BrowserWindow, not an in-page overlay.
 
-## Live implementation
+## Live engine operations
 
-- ADB discovery and user-app listing use a real adb executable when present.
-- APK installation routes through adb when a concrete APK path is supplied.
-- Android uninstall backend exists for explicit package names.
+- sharing.status
+- sharing.toggle
+- adb.devices
+- adb.apps
+- adb.install
+- adb.uninstall
+- files.copy
+- peer.list contract
+- clipboard.text contract
+- clipboard.image contract
+- ios.status
+- ios.ipa
+- console.status contract
+- console.pkg contract
 
-## Capability-gated / still requires physical backend qualification
+## Installed Windows runtime proof
 
-- Windows Internet-sharing mutation inside iNSync. ATHENA's standalone sharing proof exists, but it is intentionally not rebound until Windows iNSync qualification.
-- Peer clipboard transport.
-- iOS IPA signing/device-service transport.
-- Console-specific package installation backends.
+- Builder result: complete, exitCode 0.
+- Graphical installer verification: PASS.
+- Installer ZIP verification: PASS.
+- Installer dry-run: PASS.
+- Installed iNSync.exe hash matches the verified build payload.
+- Installed iNSync-backend.exe hash matches the verified compiled sidecar.
+- Installed main window: one visible compact main surface (~820x750 configured).
+- Minimize transition: main leaves the desktop and the 224x262 floating widget becomes the only on-screen iNSync surface.
+- Second-instance transition: existing main window restores and widget hides; no duplicate main instance is created.
+- Installed transparent-window proof: empty artwork corners match the underlying desktop pixel-for-pixel.
+- Live ATHENA sharing remained running throughout the build/install/runtime proof.
 
-Missing adapters do not redesign the UI/core. They fill the existing capability boundary.
+## Physically qualified
+
+- ATHENA Wi-Fi -> Ethernet Internet sharing works live.
+- Local/network path file-copy engine works with progress/cancel.
+- ADB engine path is available on ATHENA.
+
+## Capability-gated / next qualification
+
+- iNSync peer pairing/approval and peer-native clipboard transport.
+- iOS IPA install requires libimobiledevice/ideviceinstaller or the qualified TTG iOS adapter.
+- Console-specific PKG/package install backends.
+- Receiver-side iNSync automatic role detection beyond the current shared state contract.
+
+Missing adapters fill the existing capability boundary; they do not redesign the application.

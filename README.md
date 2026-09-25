@@ -1,8 +1,8 @@
 # iNSync
 
-THETECHGUY DIGITAL SOLUTIONS local transport utility.
+THETECHGUY DIGITAL SOLUTIONS local transport and device bridge.
 
-## Locked product shape
+## Product shape
 
 iNSync uses one transport core with capability-gated adapters for:
 
@@ -11,32 +11,72 @@ iNSync uses one transport core with capability-gated adapters for:
 - Selective text/image clipboard exchange
 - Android ADB, APK install and app management
 - iPhone / IPA transport with signing/provisioning checks
-- Console package/file transport behind device-specific qualified adapters
+- Console package/file transport behind qualified device-specific adapters
 
-The full app and the minimized clipboard/connection widget share the same Electron main-process state. The minimized widget is a real desktop window, not an in-page imitation.
+The full application and the minimized clipboard/connection widget share one main-process state contract. The minimized widget is a real desktop window and only appears when the main iNSync window is minimized.
 
-## UI state
+## Connection state
 
-Connection state is visible through the ghost glasses and widget:
+The original ghost glasses in the supplied artwork are recolored in-place:
 
-- Red — disconnected
-- Blue — receiving
-- Green — sending
+- Red - disconnected
+- Blue - receiving
+- Green - sending
 
-The connection glass can switch between Connection and Clipboard. The popup windows are compact glass panels with close/maximize controls and no default scrolling.
+No second glasses overlay is rendered.
+
+## Engine boundary
+
+The Electron renderers do not run transport commands.
+
+Renderer -> preload IPC -> Electron main -> JSONL sidecar -> queued worker jobs.
+
+Long-running operations return a job ID immediately. The engine streams progress/result events and supports cancellation. This keeps the UI responsive while ADB installs, file copies, network transitions, and future device adapters are active.
+
+## Functional UI
+
+Current popup controls include:
+
+- Sharing status / Start sharing / Back to normal
+- File and folder explorers with destination selection
+- PC Share using local, mapped, or UNC destinations
+- Clipboard text/image selection
+- Android device refresh, APK selection/install, user-app list/uninstall
+- IPA selection/device status/install when a qualified iOS backend exists
+- Console package selection/status/install queue surfaces
+
+Unsupported backend capabilities remain visibly gated instead of being simulated as working.
 
 ## Build ownership
 
-Application source lives here. THETECHGUY Software Builder owns Electron staging, sidecar packaging, release packaging and installers.
+Application source lives in this repository.
 
-Native release targets must be built on their native host.
+THETECHGUY Software Builder owns:
+- Electron staging
+- Python sidecar compilation
+- ASAR/fuse hardening
+- native package generation
+- signing/release packaging
+- graphical installers
+
+Patrol owns project-placement and ownership enforcement.
+
+Native release targets are built on their native host.
 
 ## Current proof
 
-Linux DEB:
-- installs cleanly on KRATOS
-- main Electron window launches as a normal user
-- minimize hides the main window and shows the 236x248 widget
-- Open iNSync hides the widget and restores the main window
+ATHENA:
+- Patrol allows D:\projects\iNSync
+- Patrol allows D:\projects\THETECHGUY Software Builder
+- JSONL engine protocol works through the Node sidecar bridge
+- job submission returns immediately
+- file-copy engine transfers byte-identical data
+- running file-copy job cancellation is proved
+- live sharing status resolves Wi-Fi -> Ethernet without mutating the working connection
+- ADB is available and ADB device discovery runs as an engine job
+- renderer/preload/main/sidecar syntax checks pass
+- product tests pass 5/5
 
-Backend adapters that are not physically qualified remain capability-gated rather than simulated as working.
+KRATOS:
+- prior Linux DEB install and main-window/widget transition were proved
+- Linux release will be rebuilt from the same source after this Windows functional freeze

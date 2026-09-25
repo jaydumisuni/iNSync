@@ -6,13 +6,21 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "25d0486d2ce2b6924fa64a476c11f95da1b26468e025527a4d78c78d80d24eef"
+    "sha256": "9964294e8af97cee21814340c29e02244e026ac999f735a67a367e8d89ab55e3",
+    "widget": "renderer/widget.html",
+    "widgetSha256": "8a0c60216122c3038ab212b340bc239ee0c1369f5cb8c3f7e318fe4bcd4a6348"
   },
   "backend": {
     "manifest": "backend-manifest.json",
-    "transport": "jsonl-rpc-stdio",
+    "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
-    "configured": true
+    "configured": true,
+    "sha256": "2c5772b10c3432a67b8905ae0ce36f53867a6f65627e2c3a7802ce774acad37a",
+    "jobEngine": {
+      "workers": 2,
+      "progressEvents": true,
+      "cancellation": true
+    }
   },
   "handoff": {
     "builderUiWorkspaceProduces": [

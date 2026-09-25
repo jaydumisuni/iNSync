@@ -4,3 +4,4 @@ __pycache__/
 *.py[cod]
 *.log
 build_config/thetechguy.*
+installer_output/

@@ -8,9 +8,9 @@
   "appVersion": "0.1.0",
   "projectType": "multi-platform-source",
   "entryFile": "app/electron/main.cjs",
-  "icon": "app/electron/renderer/assets/insync-logo.png",
+  "icon": "app/electron/renderer/assets/insync-logo-transparent.png",
   "icons": {
-    "linux": "app/electron/renderer/assets/insync-logo.png"
+    "linux": "app/electron/renderer/assets/insync-logo-transparent.png"
   },
   "description": "Local device and PC bridge for Internet sharing, file transfer, clipboard sync and capability-routed device operations.",
   "output": {
@@ -64,5 +64,5 @@
     "startMenuShortcutChecked": true,
     "runAfterInstallChecked": true
   },
-  "logo": "app/electron/renderer/assets/insync-logo.png"
+  "logo": "app/electron/renderer/assets/insync-logo-transparent.png"
 }

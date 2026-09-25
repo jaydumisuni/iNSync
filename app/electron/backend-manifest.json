@@ -1,8 +1,8 @@
 {
-  "schema": "ttg.ui-backend-sidecar.v1",
-  "protocol": "jsonl-rpc-stdio",
+  "schema": "ttg.ui-backend-sidecar.v2",
+  "protocol": "jsonl-rpc-stdio-events",
   "development": {
-    "executable": "/usr/bin/python3",
+    "executable": "python",
     "args": [
       "backend/insync_backend.py"
     ],
@@ -15,17 +15,11 @@
   "allowedMethods": [
     "app.snapshot",
     "sharing.status",
-    "sharing.toggle",
-    "clipboard.text",
-    "clipboard.image",
     "adb.devices",
-    "adb.apps",
-    "adb.install",
-    "adb.uninstall",
-    "ios.status",
-    "ios.ipa",
-    "console.status",
-    "files.status"
+    "job.submit",
+    "job.cancel",
+    "job.status",
+    "job.list"
   ],
-  "note": "Renderer only calls explicit backend methods. Device-specific mutations remain capability-gated in the project-owned backend."
+  "note": "Renderer submits long operations as jobs. Product-owned sidecar performs transport/device work and streams progress events; Electron renderer never runs blocking transport commands."
 }
