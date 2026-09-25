@@ -1,0 +1,11 @@
+{
+  "schema": "ttg.electron-runtime.v1",
+  "main": "main.cjs",
+  "preload": "preload.cjs",
+  "renderer": "renderer/index.html",
+  "widget": "renderer/widget.html",
+  "window": {
+    "frame": false,
+    "backgroundColor": "#000000"
+  }
+}

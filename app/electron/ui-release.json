@@ -1,0 +1,39 @@
+{
+  "schema": "ttg.ui-release.v1",
+  "product": "iNSync",
+  "appId": "com.thetechguy.insync",
+  "runtime": "electron",
+  "renderer": {
+    "entry": "renderer/index.html",
+    "kind": "self-contained-html",
+    "sha256": "25d0486d2ce2b6924fa64a476c11f95da1b26468e025527a4d78c78d80d24eef"
+  },
+  "backend": {
+    "manifest": "backend-manifest.json",
+    "transport": "jsonl-rpc-stdio",
+    "ownership": "product backend",
+    "configured": true
+  },
+  "handoff": {
+    "builderUiWorkspaceProduces": [
+      "reference-image reconstruction",
+      "renderer",
+      "electron shell",
+      "preload boundary",
+      "backend UI contract",
+      "hardening profile"
+    ],
+    "builderOwns": [
+      "stage runtime",
+      "package ASAR",
+      "apply Electron fuses",
+      "include compiled backend artifacts",
+      "sign release",
+      "build installer"
+    ],
+    "builderDoesNotOwn": [
+      "product business logic",
+      "backend implementation"
+    ]
+  }
+}

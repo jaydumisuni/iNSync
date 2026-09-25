@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "company": "THETECHGUY DIGITAL SOLUTIONS",
+  "authorEmail": "support@thetechguyds.com",
+  "domain": "thetechguyds.com",
+  "website": "https://thetechguyds.com/tools",
+  "appName": "iNSync",
+  "appVersion": "0.1.0",
+  "projectType": "multi-platform-source",
+  "entryFile": "app/electron/main.cjs",
+  "icon": "app/electron/renderer/assets/insync-logo.png",
+  "icons": {
+    "linux": "app/electron/renderer/assets/insync-logo.png"
+  },
+  "description": "Local device and PC bridge for Internet sharing, file transfer, clipboard sync and capability-routed device operations.",
+  "output": {
+    "dist": "dist/electron",
+    "installer": "installer_output"
+  },
+  "targets": [
+    "linux-appimage",
+    "linux-deb",
+    "windows-exe",
+    "windows-installer"
+  ],
+  "electron": {
+    "builderOwnsPackaging": true,
+    "sourceRoot": "app/electron",
+    "appId": "com.thetechguy.insync",
+    "linuxRuntimeName": "insync",
+    "electronVersion": "^38.0.0",
+    "electronBuilderVersion": "^26.11.1",
+    "pythonSidecars": [
+      {
+        "id": "insync-backend",
+        "enabled": true,
+        "entry": "backend/insync_backend.py",
+        "python": "3.13",
+        "name": "iNSync-backend",
+        "output": "dist/sidecars",
+        "console": false
+      }
+    ],
+    "sealedPackage": true,
+    "windowsSingleFile": true
+  },
+  "distribution": {
+    "publicDownloads": "builder-release-only",
+    "runFromSourceSupported": false
+  },
+  "sourceBoundary": {
+    "containsApplicationSource": true,
+    "containsBuildEnvironment": false,
+    "containsInstallerEngine": false,
+    "containsSigningKeys": false,
+    "builderRepository": "jaydumisuni/thetechguy-software-builder"
+  },
+  "installer": {
+    "requireCustomGraphicalInstaller": true,
+    "requireRegisteredUninstall": true,
+    "compactCustomerRoot": true,
+    "runAsAdmin": true,
+    "desktopShortcutChecked": true,
+    "startMenuShortcutChecked": true,
+    "runAfterInstallChecked": true
+  },
+  "logo": "app/electron/renderer/assets/insync-logo.png"
+}

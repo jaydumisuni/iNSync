@@ -1,0 +1,31 @@
+{
+  "schema": "ttg.ui-backend-sidecar.v1",
+  "protocol": "jsonl-rpc-stdio",
+  "development": {
+    "executable": "/usr/bin/python3",
+    "args": [
+      "backend/insync_backend.py"
+    ],
+    "cwd": "../.."
+  },
+  "packaged": {
+    "executable": "sidecars/iNSync-backend",
+    "args": []
+  },
+  "allowedMethods": [
+    "app.snapshot",
+    "sharing.status",
+    "sharing.toggle",
+    "clipboard.text",
+    "clipboard.image",
+    "adb.devices",
+    "adb.apps",
+    "adb.install",
+    "adb.uninstall",
+    "ios.status",
+    "ios.ipa",
+    "console.status",
+    "files.status"
+  ],
+  "note": "Renderer only calls explicit backend methods. Device-specific mutations remain capability-gated in the project-owned backend."
+}

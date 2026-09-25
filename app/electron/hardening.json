@@ -1,0 +1,23 @@
+{
+  "schema": "ttg.electron-hardening.v1",
+  "webPreferences": {
+    "contextIsolation": true,
+    "nodeIntegration": false,
+    "sandbox": true,
+    "webSecurity": true
+  },
+  "renderer": {
+    "criticalLogicAllowed": false
+  },
+  "packaging": {
+    "asar": true,
+    "asarUnpack": []
+  },
+  "fuses": {
+    "RunAsNode": false,
+    "EnableNodeOptionsEnvironmentVariable": false,
+    "EnableNodeCliInspectArguments": false,
+    "EnableEmbeddedAsarIntegrityValidation": true,
+    "OnlyLoadAppFromAsar": true
+  }
+}
