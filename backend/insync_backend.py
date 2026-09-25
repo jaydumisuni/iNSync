@@ -3,13 +3,17 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import queue
 import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -508,25 +512,116 @@ def _adb_prefix(serial: str) -> list[str]:
     return [adb] + (["-s", serial] if serial else [])
 
 
+def adb_info_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    serial = str(job.params.get("serial") or "")
+    engine.progress(job, 10, "Reading Android device information")
+    prefix = _adb_prefix(serial)
+    fields: dict[str, str] = {}
+    for key, command in (
+        ("model", ["shell", "getprop", "ro.product.model"]),
+        ("manufacturer", ["shell", "getprop", "ro.product.manufacturer"]),
+        ("android", ["shell", "getprop", "ro.build.version.release"]),
+        ("sdk", ["shell", "getprop", "ro.build.version.sdk"]),
+    ):
+        rc, out, _ = run_process(job, prefix + command, timeout=20)
+        if rc == 0:
+            fields[key] = out.strip()
+    rc, out, err = run_process(job, prefix + ["shell", "df", "-k", "/data"], timeout=20)
+    storage = {}
+    if rc == 0:
+        lines = [line.split() for line in out.splitlines() if line.strip()]
+        if len(lines) >= 2 and len(lines[-1]) >= 4:
+            row = lines[-1]
+            try:
+                total = int(row[1]) * 1024
+                used = int(row[2]) * 1024
+                free = int(row[3]) * 1024
+                storage = {"total": total, "used": used, "free": free}
+            except ValueError:
+                pass
+    return ok(
+        "Android device information refreshed",
+        serial=serial,
+        device=fields,
+        storage=storage,
+        error=err if rc else "",
+    )
+
+
+def _package_lines(out: str) -> list[str]:
+    return sorted({
+        line.split("package:", 1)[-1].strip()
+        for line in out.splitlines()
+        if line.strip().startswith("package:")
+    })
+
+
 def adb_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     serial = str(job.params.get("serial") or "")
-    engine.progress(job, 15, "Reading installed applications")
-    cmd = _adb_prefix(serial) + ["shell", "pm", "list", "packages", "-3"]
-    rc, out, err = run_process(job, cmd, timeout=30)
-    apps = sorted(x.split("package:", 1)[-1].strip() for x in out.splitlines() if x.strip().startswith("package:")) if rc == 0 else []
-    return {"ok": rc == 0, "available": True, "apps": apps, "message": f"{len(apps)} user app(s)", "error": err if rc else ""}
+    prefix = _adb_prefix(serial)
+    engine.progress(job, 10, "Reading user applications")
+    rc_user, out_user, err_user = run_process(job, prefix + ["shell", "pm", "list", "packages", "-3"], timeout=35)
+    engine.progress(job, 55, "Reading system applications")
+    rc_sys, out_sys, err_sys = run_process(job, prefix + ["shell", "pm", "list", "packages", "-s"], timeout=35)
+    user = _package_lines(out_user) if rc_user == 0 else []
+    system = _package_lines(out_sys) if rc_sys == 0 else []
+    apps = (
+        [{"package": package, "kind": "user", "action": "uninstall"} for package in user]
+        + [{"package": package, "kind": "system", "action": "disable"} for package in system]
+    )
+    return {
+        "ok": rc_user == 0 or rc_sys == 0,
+        "available": True,
+        "apps": apps,
+        "counts": {"user": len(user), "system": len(system)},
+        "message": f"{len(user)} user / {len(system)} system app(s)",
+        "error": "\n".join(x for x in (err_user if rc_user else "", err_sys if rc_sys else "") if x),
+    }
+
+
+def _expand_android_packages(paths: list[Path]) -> tuple[list[Path], tempfile.TemporaryDirectory[str] | None]:
+    if len(paths) != 1 or paths[0].suffix.lower() not in {".apks", ".xapk"}:
+        return paths, None
+    archive = paths[0]
+    temp = tempfile.TemporaryDirectory(prefix="insync-apk-")
+    target = Path(temp.name)
+    with zipfile.ZipFile(archive) as zf:
+        for name in zf.namelist():
+            if name.lower().endswith(".apk") and not name.endswith("/"):
+                zf.extract(name, target)
+    expanded = sorted(target.rglob("*.apk"))
+    if not expanded:
+        temp.cleanup()
+        raise ValueError(f"{archive.name} contains no APK files")
+    return expanded, temp
 
 
 def adb_install_job(job: Job, engine: JobEngine) -> dict[str, Any]:
-    path = Path(str(job.params.get("path") or ""))
-    if not path.is_file():
-        return unavailable("Choose an APK before installing")
+    raw = job.params.get("paths") or ([job.params.get("path")] if job.params.get("path") else [])
+    paths = [Path(str(value)) for value in raw if value]
+    if not paths or any(not path.is_file() for path in paths):
+        return unavailable("Choose an APK, APKS/XAPK bundle, or split APK set before installing")
     serial = str(job.params.get("serial") or "")
-    engine.progress(job, 10, f"Preparing {path.name}")
-    cmd = _adb_prefix(serial) + ["install", "-r", str(path)]
-    engine.progress(job, 25, "Installing APK through ADB")
-    rc, out, err = run_process(job, cmd, timeout=300)
-    return {"ok": rc == 0, "available": True, "message": out or err or ("Installed" if rc == 0 else "Install failed"), "path": str(path)}
+    engine.progress(job, 8, "Preparing Android package")
+    expanded, temp = _expand_android_packages(paths)
+    try:
+        command = _adb_prefix(serial)
+        if len(expanded) == 1:
+            command += ["install", "-r", str(expanded[0])]
+        else:
+            command += ["install-multiple", "-r", *[str(path) for path in expanded]]
+        engine.progress(job, 22, f"Installing {len(expanded)} APK file(s) through ADB")
+        rc, out, err = run_process(job, command, timeout=600)
+        return {
+            "ok": rc == 0,
+            "available": True,
+            "message": out or err or ("Installed" if rc == 0 else "Install failed"),
+            "paths": [str(path) for path in paths],
+            "apk_count": len(expanded),
+        }
+    finally:
+        if temp is not None:
+            temp.cleanup()
 
 
 def adb_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -537,6 +632,20 @@ def adb_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     engine.progress(job, 20, f"Uninstalling {package}")
     rc, out, err = run_process(job, _adb_prefix(serial) + ["uninstall", package], timeout=90)
     return {"ok": rc == 0, "available": True, "message": out or err or ("Uninstalled" if rc == 0 else "Uninstall failed"), "package": package}
+
+
+def adb_disable_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    package = str(job.params.get("package") or "").strip()
+    if not package:
+        return unavailable("Choose a system app before disabling")
+    serial = str(job.params.get("serial") or "")
+    engine.progress(job, 20, f"Disabling {package} for user 0")
+    rc, out, err = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "pm", "disable-user", "--user", "0", package],
+        timeout=90,
+    )
+    return {"ok": rc == 0, "available": True, "message": out or err or ("Disabled" if rc == 0 else "Disable failed"), "package": package}
 
 
 def _collect_copy_plan(sources: list[Path], destination: Path) -> tuple[list[tuple[Path, Path, int]], int]:
@@ -617,8 +726,211 @@ def clipboard_send_image_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     return unavailable("Peer clipboard transport is not qualified yet", payload="image", targets=targets)
 
 
+PEER_PORT = 49549
+PEER_MAGIC = b"INSYNC_DISCOVER_V1"
+
+
+def _peer_config_path() -> Path:
+    return _local_state_dir() / "peer-config.json"
+
+
+def _load_peer_config() -> dict[str, Any]:
+    path = _peer_config_path()
+    if path.exists():
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(value, dict):
+                return value
+        except Exception:
+            pass
+    value = {
+        "peer_id": uuid.uuid4().hex,
+        "role": "idle",
+        "scope": "internet-only",
+        "shared_paths": [],
+        "approved_ids": [],
+    }
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    return value
+
+
+def _save_peer_config(value: dict[str, Any]) -> None:
+    _peer_config_path().write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+class PeerDiscovery:
+    def __init__(self) -> None:
+        self._thread = threading.Thread(target=self._serve, name="insync-peer-discovery", daemon=True)
+        self._thread.start()
+
+    @staticmethod
+    def _record(ip: str = "") -> dict[str, Any]:
+        config = _load_peer_config()
+        return {
+            "id": config["peer_id"],
+            "name": socket.gethostname(),
+            "host": socket.gethostname(),
+            "ip": ip,
+            "role": config.get("role", "idle"),
+            "scope": config.get("scope", "internet-only"),
+            "shared_paths": config.get("shared_paths", []),
+            "approved": True,
+            "self": True,
+            "port": PEER_PORT,
+        }
+
+    def _serve(self) -> None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind(("", PEER_PORT))
+            while True:
+                try:
+                    data, address = sock.recvfrom(8192)
+                except OSError:
+                    time.sleep(0.5)
+                    continue
+                if data.strip() != PEER_MAGIC:
+                    continue
+                payload = json.dumps(self._record(address[0]), separators=(",", ":")).encode("utf-8")
+                try:
+                    sock.sendto(payload, address)
+                except OSError:
+                    pass
+        except OSError:
+            return
+        finally:
+            sock.close()
+
+    def discover(self, timeout: float = 0.8) -> list[dict[str, Any]]:
+        config = _load_peer_config()
+        approved = set(str(x) for x in config.get("approved_ids", []))
+        peers: dict[str, dict[str, Any]] = {}
+        self_record = self._record("127.0.0.1")
+        peers[self_record["id"]] = self_record
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind(("", 0))
+            sock.settimeout(0.12)
+            for target in (("255.255.255.255", PEER_PORT), ("127.0.0.1", PEER_PORT)):
+                try:
+                    sock.sendto(PEER_MAGIC, target)
+                except OSError:
+                    pass
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                try:
+                    data, address = sock.recvfrom(8192)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                try:
+                    peer = json.loads(data.decode("utf-8"))
+                except Exception:
+                    continue
+                peer_id = str(peer.get("id") or "")
+                if not peer_id:
+                    continue
+                peer["ip"] = address[0]
+                peer["self"] = peer_id == config["peer_id"]
+                peer["approved"] = peer["self"] or peer_id in approved
+                peers[peer_id] = peer
+        finally:
+            sock.close()
+        return sorted(peers.values(), key=lambda item: (not item.get("self", False), str(item.get("name", ""))))
+
+
+PEER_DISCOVERY = PeerDiscovery()
+
+
 def peers_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
-    return ok("Peer discovery engine ready; no approved peers registered yet", peers=[])
+    engine.progress(job, 15, "Discovering iNSync peers")
+    peers = PEER_DISCOVERY.discover()
+    remote = [peer for peer in peers if not peer.get("self")]
+    return ok(f"{len(remote)} remote iNSync peer(s) found", peers=peers)
+
+
+def peer_configure_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    role = str(job.params.get("role") or "idle").lower()
+    scope = str(job.params.get("scope") or "internet-only").lower()
+    if role not in {"provider", "receiver", "idle"}:
+        return unavailable("Role must be provider, receiver or idle")
+    if scope not in {"internet-only", "internet-folders", "selected-location", "whole-pc"}:
+        return unavailable("Unknown PC share scope")
+    shared_paths = [str(Path(str(value))) for value in (job.params.get("shared_paths") or []) if value]
+    config = _load_peer_config()
+    config.update({"role": role, "scope": scope, "shared_paths": shared_paths})
+    _save_peer_config(config)
+    emit("peer.state", peer=PEER_DISCOVERY._record("127.0.0.1"))
+    return ok("PC share role applied", peer=PEER_DISCOVERY._record("127.0.0.1"))
+
+
+def peer_approve_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    peer_id = str(job.params.get("peer_id") or "")
+    approved = bool(job.params.get("approved", True))
+    if not peer_id:
+        return unavailable("Peer id required")
+    config = _load_peer_config()
+    values = set(str(x) for x in config.get("approved_ids", []))
+    if approved:
+        values.add(peer_id)
+    else:
+        values.discard(peer_id)
+    config["approved_ids"] = sorted(values)
+    _save_peer_config(config)
+    return ok("Peer approval updated", peer_id=peer_id, approved=approved)
+
+
+def _ipa_metadata(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(str(path))
+    with zipfile.ZipFile(path) as zf:
+        names = zf.namelist()
+        info_name = next(
+            (name for name in names if name.startswith("Payload/") and name.endswith(".app/Info.plist")),
+            None,
+        )
+        if not info_name:
+            raise ValueError("IPA has no Payload/*.app/Info.plist")
+        info = plistlib.loads(zf.read(info_name))
+        app_root = info_name.rsplit("/", 1)[0] + "/"
+        signed = any(name.startswith(app_root + "_CodeSignature/") for name in names)
+        return {
+            "name": info.get("CFBundleDisplayName") or info.get("CFBundleName") or path.stem,
+            "bundle_id": info.get("CFBundleIdentifier") or "",
+            "version": info.get("CFBundleShortVersionString") or info.get("CFBundleVersion") or "",
+            "minimum_os": info.get("MinimumOSVersion") or "",
+            "signed": signed,
+            "size": path.stat().st_size,
+        }
+
+
+def ios_validate_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    path = Path(str(job.params.get("path") or ""))
+    if not path.is_file():
+        return unavailable("Choose an IPA before validating")
+    engine.progress(job, 20, "Reading IPA metadata")
+    try:
+        metadata = _ipa_metadata(path)
+    except Exception as exc:
+        return unavailable(f"IPA validation failed: {exc}")
+    return ok(
+        "IPA validated" if metadata.get("signed") else "IPA parsed; signing/provisioning still required",
+        metadata=metadata,
+        path=str(path),
+    )
+
+
+def _parse_key_value_lines(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        if ": " in line:
+            key, value = line.split(": ", 1)
+            values[key.strip()] = value.strip()
+    return values
 
 
 def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -628,11 +940,39 @@ def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("iOS device-service backend is not installed")
     rc, out, err = run_process(job, [idevice_id, "-l"], timeout=20)
     ids = [x.strip() for x in out.splitlines() if x.strip()] if rc == 0 else []
-    result = {"ok": rc == 0, "available": True, "devices": ids, "message": f"{len(ids)} iOS device(s)", "error": err if rc else ""}
+    result: dict[str, Any] = {
+        "ok": rc == 0,
+        "available": True,
+        "devices": ids,
+        "message": f"{len(ids)} iOS device(s)",
+        "error": err if rc else "",
+    }
     if ids and ideviceinfo:
-        rc2, out2, _ = run_process(job, [ideviceinfo, "-u", ids[0], "-k", "ProductVersion"], timeout=20)
+        engine.progress(job, 45, "Reading iPhone device status")
+        rc2, info_out, info_err = run_process(job, [ideviceinfo, "-u", ids[0]], timeout=30)
         if rc2 == 0:
-            result["ios_version"] = out2.strip()
+            info = _parse_key_value_lines(info_out)
+            result["device"] = {
+                "udid": ids[0],
+                "name": info.get("DeviceName", ""),
+                "product_type": info.get("ProductType", ""),
+                "ios_version": info.get("ProductVersion", ""),
+                "build": info.get("BuildVersion", ""),
+            }
+        elif info_err:
+            result["detail"] = info_err
+        rc3, disk_out, _ = run_process(job, [ideviceinfo, "-u", ids[0], "-q", "com.apple.disk_usage"], timeout=30)
+        if rc3 == 0:
+            disk = _parse_key_value_lines(disk_out)
+            def number(key: str) -> int | None:
+                try:
+                    return int(disk.get(key, ""))
+                except ValueError:
+                    return None
+            total = number("TotalDiskCapacity") or number("TotalDataCapacity")
+            free = number("TotalDataAvailable")
+            if total or free:
+                result["storage"] = {"total": total, "free": free}
     return result
 
 
@@ -640,12 +980,26 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     path = Path(str(job.params.get("path") or ""))
     if not path.is_file():
         return unavailable("Choose an IPA before installing")
+    try:
+        metadata = _ipa_metadata(path)
+    except Exception as exc:
+        return unavailable(f"IPA validation failed: {exc}")
     installer = command_path("ideviceinstaller")
     if not installer:
-        return unavailable("IPA installer backend is not installed")
+        return unavailable(
+            "IPA is validated, but the install backend is not installed",
+            metadata=metadata,
+            path=str(path),
+        )
     engine.progress(job, 20, "Installing IPA")
     rc, out, err = run_process(job, [installer, "-i", str(path)], timeout=600)
-    return {"ok": rc == 0, "available": True, "message": out or err, "path": str(path)}
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "message": out or err,
+        "path": str(path),
+        "metadata": metadata,
+    }
 
 
 def console_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -665,14 +1019,19 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "sharing.status": sharing_status_job,
     "sharing.toggle": sharing_toggle,
     "adb.devices": adb_devices_job,
+    "adb.info": adb_info_job,
     "adb.apps": adb_apps_job,
     "adb.install": adb_install_job,
     "adb.uninstall": adb_uninstall_job,
+    "adb.disable": adb_disable_job,
     "files.copy": files_copy_job,
     "peer.list": peers_list_job,
+    "peer.configure": peer_configure_job,
+    "peer.approve": peer_approve_job,
     "clipboard.text": clipboard_send_text_job,
     "clipboard.image": clipboard_send_image_job,
     "ios.status": ios_status_job,
+    "ios.validate": ios_validate_job,
     "ios.ipa": ios_ipa_job,
     "console.status": console_status_job,
     "console.pkg": console_pkg_job,
@@ -690,8 +1049,11 @@ def snapshot() -> dict[str, Any]:
             "file_copy": True,
             "adb": bool(adb),
             "ios": bool(command_path("idevice_id")),
+            "ipa_validation": True,
+            "peer_discovery": True,
+            "peer_roles": True,
             "console_pkg": "adapter-pending",
-            "clipboard_peer": "pairing-pending",
+            "clipboard_peer": "approval-transport-pending",
         },
     )
 
