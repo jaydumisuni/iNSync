@@ -4,11 +4,11 @@
 
 - Patrol project root on ATHENA: PASS.
 - Patrol project root on KRATOS: PASS.
-- Frozen product source baseline: e5fe414.
+- Frozen product source baseline: 3ba5b95.
 - Python backend compile: PASS.
 - Renderer JavaScript parse: PASS.
-- ATHENA product unittest suite: 22/22 PASS.
-- KRATOS product unittest suite: 22/22 PASS.
+- ATHENA product unittest suite: 26/26 PASS.
+- KRATOS product unittest suite: 26/26 PASS.
 - Renderer has one active module authority.
 - APK and Android are separate surfaces sharing the same ADB engine.
 - Android content surface includes Photos, Videos and Apps.
@@ -27,12 +27,30 @@
 - clipboard.text / clipboard.image
 - files.copy
 - adb.devices / adb.info / adb.apps / adb.install / adb.uninstall
+- adb.wifi.status / adb.wifi.enable / adb.wifi.connect / adb.wifi.disconnect / adb.wifi.usb / adb.wifi.pair
 - adb.media.list / adb.media.preview / adb.media.pull / adb.media.delete
 - ios.status / ios.validate / ios.ipa
 - ios.apps / ios.app.uninstall
 - ios.media.list / ios.media.preview / ios.media.pull / ios.media.delete
 - ios.documents.list / ios.documents.pull / ios.documents.push / ios.documents.delete
 - console.status / console.pkg capability contracts
+
+## APK app-manager and Wi-Fi ADB proof
+
+Source evidence was recovered from D:\projects\THETECHGUY Device Manager\new eco system before implementation. The existing PC tools prove the intended tcpip 5555 -> wlan0 -> connect sequence; the Device Manager app-manager flow proves all/user/system package listing; and WirelessPairActivity.kt proves Android 11+ pairing remains an OS Wireless debugging flow.
+
+Live itel A6611L proof:
+
+- USB serial: 157503761E002929.
+- APK app manager returned 270 installed packages: 17 user + 253 system.
+- Direct package-manager measurements were ~0.16-0.19 seconds. The earlier 35-second timeout was traced to iNSync polling a child process while leaving stdout/stderr in undrained Windows pipes.
+- run_process and binary process capture now spill stdout/stderr to temporary files while retaining cancellation and timeout semantics.
+- Regression proof writes 512 KiB of child stdout and completes without pipe deadlock.
+- Phone Wi-Fi address during proof: 192.168.23.53.
+- adb.wifi.enable switched adbd to TCP 5555 and connected 192.168.23.53:5555.
+- Over the wireless serial, iNSync read itel A6611L / Android 15 / SDK 35 / storage and the same 270-package inventory.
+- adb.wifi.usb returned adbd to USB mode; final ADB inventory contained only USB serial 157503761E002929.
+- Android 11+ pairing is implemented as IP:port + pairing code support. No live pairing is claimed because no phone-generated pairing code was supplied during this proof.
 
 ## Android physical proof
 
