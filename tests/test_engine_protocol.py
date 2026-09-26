@@ -244,5 +244,35 @@ class EngineProtocolTests(unittest.TestCase):
             self.assertEqual(total, 3)
 
 
+    def test_wifi_adb_endpoint_normalization(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_wifi_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module._adb_endpoint("192.168.10.22"), "192.168.10.22:5555")
+        self.assertEqual(module._adb_endpoint("192.168.10.22:37123"), "192.168.10.22:37123")
+        with self.assertRaises(ValueError):
+            module._adb_endpoint("192.168.10.22", require_port=True)
+
+
+    def test_run_process_drains_large_stdout_without_pipe_deadlock(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_output_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        job = module.Job("test.large-output", {})
+        payload_size = 512 * 1024
+        rc, out, err = module.run_process(
+            job,
+            [sys.executable, "-c", f"import sys;sys.stdout.write('X'*{payload_size})"],
+            timeout=10,
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(out), payload_size)
+        self.assertEqual(err, "")
+
+
 if __name__ == "__main__":
     unittest.main()

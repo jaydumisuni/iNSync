@@ -189,34 +189,46 @@ def run_process(
     cwd: str | None = None,
     env: dict[str, str] | None = None,
 ) -> tuple[int, str, str]:
-    proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        env=env,
-        shell=False,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
-    )
-    job.process = proc
-    started = time.time()
-    while proc.poll() is None:
-        if job.cancel.is_set():
-            try:
-                proc.terminate()
-            finally:
-                raise Cancelled()
-        if time.time() - started > timeout:
-            try:
-                proc.kill()
-            finally:
-                raise TimeoutError(f"Command timed out after {timeout:g}s")
-        time.sleep(0.1)
-    out, err = proc.communicate()
-    return proc.returncode, out.strip(), err.strip()
+    # Do not leave verbose child stdout/stderr in PIPEs while polling for
+    # cancellation. On Windows, a full pipe can block the child before it exits
+    # and make an otherwise-fast ADB command appear to time out. Temporary files
+    # keep output draining at OS/file speed while retaining the explicit
+    # cancellation and timeout loop.
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            env=env,
+            shell=False,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
+        )
+        job.process = proc
+        started = time.time()
+        while proc.poll() is None:
+            if job.cancel.is_set():
+                try:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=2)
+                finally:
+                    raise Cancelled()
+            if time.time() - started > timeout:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                finally:
+                    raise TimeoutError(f"Command timed out after {timeout:g}s")
+            time.sleep(0.05)
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        out = stdout_file.read().decode("utf-8", errors="replace")
+        err = stderr_file.read().decode("utf-8", errors="replace")
+        return proc.returncode, out.strip(), err.strip()
 
 
 def run_process_bytes(
@@ -228,12 +240,12 @@ def run_process_bytes(
 ) -> tuple[int, bytes, str]:
     # Use a temporary file for binary stdout so a large image cannot fill a
     # PIPE buffer and stall the child while the cancellation loop is polling.
-    with tempfile.TemporaryFile() as binary_out:
+    with tempfile.TemporaryFile() as binary_out, tempfile.TemporaryFile() as stderr_file:
         proc = subprocess.Popen(
             cmd,
             shell=False,
             stdout=binary_out,
-            stderr=subprocess.PIPE,
+            stderr=stderr_file,
             creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
         )
         job.process = proc
@@ -242,21 +254,28 @@ def run_process_bytes(
             if job.cancel.is_set():
                 try:
                     proc.terminate()
+                    try:
+                        proc.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=2)
                 finally:
                     raise Cancelled()
             if time.time() - started > timeout:
                 try:
                     proc.kill()
+                    proc.wait(timeout=2)
                 finally:
                     raise TimeoutError(f"Command timed out after {timeout:g}s")
-            time.sleep(0.1)
-        _, err = proc.communicate()
+            time.sleep(0.05)
         binary_out.seek(0, os.SEEK_END)
         size = binary_out.tell()
         if size > max_bytes:
             return 2, b"", f"Preview is larger than {max_bytes // (1024 * 1024)} MB"
         binary_out.seek(0)
+        stderr_file.seek(0)
         out = binary_out.read()
+        err = stderr_file.read()
     return proc.returncode, out, err.decode("utf-8", errors="replace").strip()
 
 
@@ -622,6 +641,191 @@ def adb_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "counts": {"user": len(user), "system": len(system)},
         "message": f"{len(user)} user / {len(system)} system app(s)",
         "error": "\n".join(x for x in (err_user if rc_user else "", err_sys if rc_sys else "") if x),
+    }
+
+
+def _adb_ready_serial(serial: str = "") -> str:
+    data = adb_devices_data()
+    devices = [row for row in data.get("devices", []) if row.get("state") == "device"]
+    if serial:
+        if any(row.get("serial") == serial for row in devices):
+            return serial
+        raise ValueError(f"ADB device is not ready: {serial}")
+    usb = [row for row in devices if ":" not in str(row.get("serial") or "")]
+    if len(usb) == 1:
+        return str(usb[0]["serial"])
+    if len(devices) == 1:
+        return str(devices[0]["serial"])
+    if not devices:
+        raise ValueError("No ready ADB device")
+    raise ValueError("More than one ADB device is ready; choose a device first")
+
+
+def _adb_wlan_ipv4(job: Job, serial: str) -> str:
+    rc, out, _ = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
+        timeout=20,
+    )
+    if rc != 0:
+        return ""
+    for line in out.splitlines():
+        text = line.strip()
+        if not text.startswith("inet "):
+            continue
+        value = text.split()[1].split("/", 1)[0].strip()
+        if value.count(".") == 3:
+            return value
+    return ""
+
+
+def _adb_endpoint(value: str, default_port: int = 5555, require_port: bool = False) -> str:
+    endpoint = str(value or "").strip()
+    if not endpoint:
+        return ""
+    if ":" in endpoint:
+        return endpoint
+    if require_port:
+        raise ValueError("Wireless pairing endpoint must include IP:port")
+    return f"{endpoint}:{default_port}"
+
+
+def adb_wifi_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    serial = str(job.params.get("serial") or "").strip()
+    devices = adb_devices_data(job)
+    ready = [row for row in devices.get("devices", []) if row.get("state") == "device"]
+    selected = serial if serial and any(row.get("serial") == serial for row in ready) else ""
+    if not selected:
+        usb = [row for row in ready if ":" not in str(row.get("serial") or "")]
+        if len(usb) == 1:
+            selected = str(usb[0]["serial"])
+        elif len(ready) == 1:
+            selected = str(ready[0]["serial"])
+    wlan_ip = ""
+    adb_enabled = ""
+    tcp_port = ""
+    if selected:
+        engine.progress(job, 35, "Reading Android wireless ADB state")
+        wlan_ip = _adb_wlan_ipv4(job, selected)
+        for key, command in (
+            ("adb_enabled", ["shell", "settings", "get", "global", "adb_enabled"]),
+            ("tcp_port", ["shell", "getprop", "service.adb.tcp.port"]),
+        ):
+            rc, out, _ = run_process(job, _adb_prefix(selected) + command, timeout=20)
+            if rc == 0:
+                if key == "adb_enabled":
+                    adb_enabled = out.strip()
+                else:
+                    tcp_port = out.strip()
+    wireless = [row for row in ready if ":" in str(row.get("serial") or "")]
+    return ok(
+        "Wireless ADB status refreshed",
+        selected_serial=selected,
+        wlan_ip=wlan_ip,
+        adb_enabled=adb_enabled,
+        tcp_port=tcp_port,
+        wireless_devices=wireless,
+        devices=devices.get("devices", []),
+    )
+
+
+def adb_wifi_enable_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    serial = _adb_ready_serial(str(job.params.get("serial") or ""))
+    engine.progress(job, 12, "Reading Android Wi-Fi address")
+    wlan_ip = _adb_wlan_ipv4(job, serial)
+    if not wlan_ip:
+        return unavailable("The selected Android device has no wlan0 IPv4 address", serial=serial)
+    engine.progress(job, 38, "Switching adbd to tcpip 5555")
+    rc, out, err = run_process(job, _adb_prefix(serial) + ["tcpip", "5555"], timeout=25)
+    if rc != 0:
+        return unavailable(out or err or "Could not enable wireless ADB", serial=serial, wlan_ip=wlan_ip)
+    endpoint = f"{wlan_ip}:5555"
+    time.sleep(1.0)
+    adb = adb_path()
+    if not adb:
+        return unavailable("ADB is not installed or not on PATH", serial=serial, wlan_ip=wlan_ip)
+    engine.progress(job, 68, f"Connecting to {endpoint}")
+    rc2, out2, err2 = run_process(job, [adb, "connect", endpoint], timeout=25)
+    message = out2 or err2 or out or "Wireless ADB command completed"
+    success = rc2 == 0 and ("connected to" in message.lower() or "already connected" in message.lower())
+    return {
+        "ok": success,
+        "available": True,
+        "message": message,
+        "serial": serial,
+        "wlan_ip": wlan_ip,
+        "endpoint": endpoint,
+        "devices": adb_devices_data().get("devices", []),
+    }
+
+
+def adb_wifi_connect_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    endpoint = _adb_endpoint(str(job.params.get("endpoint") or job.params.get("ip") or ""))
+    if not endpoint:
+        return unavailable("Enter the Android Wi-Fi ADB IP or IP:port")
+    adb = adb_path()
+    if not adb:
+        return unavailable("ADB is not installed or not on PATH")
+    engine.progress(job, 25, f"Connecting to {endpoint}")
+    rc, out, err = run_process(job, [adb, "connect", endpoint], timeout=25)
+    message = out or err or "adb connect completed"
+    return {
+        "ok": rc == 0 and ("connected to" in message.lower() or "already connected" in message.lower()),
+        "available": True,
+        "message": message,
+        "endpoint": endpoint,
+        "devices": adb_devices_data().get("devices", []),
+    }
+
+
+def adb_wifi_disconnect_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    raw = str(job.params.get("endpoint") or "").strip()
+    serial = str(job.params.get("serial") or "").strip()
+    endpoint = _adb_endpoint(raw or (serial if ":" in serial else ""))
+    if not endpoint:
+        return unavailable("Choose or enter a wireless ADB endpoint first")
+    adb = adb_path()
+    if not adb:
+        return unavailable("ADB is not installed or not on PATH")
+    engine.progress(job, 30, f"Disconnecting {endpoint}")
+    rc, out, err = run_process(job, [adb, "disconnect", endpoint], timeout=20)
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "message": out or err or "Wireless ADB disconnected",
+        "endpoint": endpoint,
+        "devices": adb_devices_data().get("devices", []),
+    }
+
+
+def adb_wifi_usb_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    serial = _adb_ready_serial(str(job.params.get("serial") or ""))
+    engine.progress(job, 30, "Returning adbd to USB mode")
+    rc, out, err = run_process(job, _adb_prefix(serial) + ["usb"], timeout=25)
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "message": out or err or "ADB USB mode requested",
+        "serial": serial,
+    }
+
+
+def adb_wifi_pair_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    endpoint = _adb_endpoint(str(job.params.get("endpoint") or ""), require_port=True)
+    code = str(job.params.get("code") or "").strip()
+    if not endpoint or not code:
+        return unavailable("Enter the Wireless debugging pairing IP:port and pairing code")
+    adb = adb_path()
+    if not adb:
+        return unavailable("ADB is not installed or not on PATH")
+    engine.progress(job, 30, f"Pairing with {endpoint}")
+    rc, out, err = run_process(job, [adb, "pair", endpoint, code], timeout=30)
+    message = out or err or "adb pair completed"
+    return {
+        "ok": rc == 0 and "successfully paired" in message.lower(),
+        "available": True,
+        "message": message,
+        "endpoint": endpoint,
     }
 
 
@@ -2374,6 +2578,12 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.devices": adb_devices_job,
     "adb.info": adb_info_job,
     "adb.apps": adb_apps_job,
+    "adb.wifi.status": adb_wifi_status_job,
+    "adb.wifi.enable": adb_wifi_enable_job,
+    "adb.wifi.connect": adb_wifi_connect_job,
+    "adb.wifi.disconnect": adb_wifi_disconnect_job,
+    "adb.wifi.usb": adb_wifi_usb_job,
+    "adb.wifi.pair": adb_wifi_pair_job,
     "adb.media.list": adb_media_list_job,
     "adb.media.preview": adb_media_preview_job,
     "adb.media.pull": adb_media_pull_job,
@@ -2421,6 +2631,8 @@ def snapshot() -> dict[str, Any]:
             "peer_files": True,
             "peer_file_browse": True,
             "adb": bool(adb),
+            "adb_wifi": bool(adb),
+            "adb_wifi_pair": bool(adb),
             "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),
             "ios_bridge": _pmd_available(),

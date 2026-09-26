@@ -39,7 +39,8 @@ button,select,input{font:inherit}
 
 .lumi-combobox-host{position:relative;display:block;margin-top:9px}.lumi-combo-trigger{width:100%;min-height:36px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 10px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.82);color:#dce7f5;text-align:left;cursor:pointer}.lumi-combo-trigger strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-chevron{width:9px;height:9px;border-right:2px solid #b6c8de;border-bottom:2px solid #b6c8de;transform:rotate(45deg) translateY(-2px);transition:.14s}.lumi-combobox-host.open .lumi-chevron{transform:rotate(225deg) translate(-1px,-1px)}.lumi-combobox-list{position:absolute;z-index:225;left:0;right:0;top:calc(100% + 5px);max-height:255px;overflow:auto;padding:5px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.99);box-shadow:0 18px 50px rgba(0,0,0,.5);scrollbar-width:none}.lumi-combobox-list::-webkit-scrollbar{display:none}.lumi-combobox-list[hidden]{display:none}.lumi-combo-search{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:7px;margin:1px 1px 5px;padding:6px 8px;border:1px solid rgba(87,165,255,.35);border-radius:8px;background:#08101d}.lumi-combo-search span{font-size:0;color:#88a9c8}.search-mark{width:9px;height:9px;border:1.5px solid #88a9c8;border-radius:50%;position:relative;display:block}.search-mark:after{content:"";position:absolute;width:5px;height:1.5px;background:#88a9c8;right:-4px;bottom:-2px;transform:rotate(45deg);border-radius:2px}.lumi-combo-search input{width:100%;border:0!important;background:transparent!important;padding:0!important;color:#eaf4ff!important;outline:0!important;font-size:9px}.lumi-combobox-option{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;border:0;border-radius:8px;padding:8px 9px;background:transparent;color:#dce7f5;text-align:left;cursor:pointer}.lumi-combobox-option strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-combobox-option small{color:#7788a0;font-size:8px}.lumi-combobox-option:hover,.lumi-combobox-option.active{background:linear-gradient(90deg,rgba(87,165,255,.18),rgba(124,109,255,.12));color:#fff}
 .device-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.72fr);gap:7px;margin-bottom:9px}.android-content{min-height:0;display:flex;flex-direction:column}.android-content .media-list,.android-content .app-list{flex:1;max-height:none;min-height:0}.media-thumb{width:42px;height:42px;object-fit:cover;border-radius:10px;border:1px solid rgba(84,188,255,.13);background:rgba(12,25,42,.9);display:block}.media-list.large .media-row{position:relative;overflow:hidden}.media-list.large .media-row:before{display:none}.media-list.large .media-thumb{width:100%;height:108px;border-radius:10px}.media-list.large .media-copy{min-width:0}.media-placeholder{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(82,183,255,.14);background:linear-gradient(135deg,rgba(30,210,255,.14),rgba(87,95,255,.1));font-size:17px;color:#b8dcff}.media-list.large .media-placeholder{width:100%;height:108px;font-size:28px}.media-row-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}.media-list.large .media-row-main{grid-template-columns:1fr;align-items:start}.media-list.large .media-actions{margin-top:3px}.sectiontabs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
-.remote-list{max-height:260px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}.remote-list::-webkit-scrollbar{display:none;width:0}.sectiontabs.two{grid-template-columns:repeat(2,minmax(0,1fr))}</style>
+.remote-list{max-height:260px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}.remote-list::-webkit-scrollbar{display:none;width:0}.sectiontabs.two{grid-template-columns:repeat(2,minmax(0,1fr))}.apk-app-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-bottom:8px}.apk-app-tools input,.wifi-adb-grid input{width:100%;min-height:34px;border-radius:10px;border:1px solid rgba(91,119,191,.35);background:rgba(8,13,21,.86);color:#dce7f5;padding:8px 10px;outline:none}.apk-app-tools input:focus,.wifi-adb-grid input:focus{border-color:rgba(67,190,255,.6);box-shadow:0 0 0 2px rgba(67,190,255,.08)}.apk-filter{margin:0}.wifi-adb-grid{display:grid;gap:10px}.wifi-adb-grid .buttonbar{margin-top:0}
+</style>
 </head>
 <body>
 <div id="stage">
@@ -91,7 +92,7 @@ const data={
   files:{sources:[],destination:"",peers:[],targets:[],mode:"send",remotePeer:"",remoteRoots:[],remoteRoot:"",remotePath:"",remoteEntries:[]},
   clipboard:{peers:[],targets:[],types:{text:true,image:true,files:false},direction:"two-way"},
   android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{}},
-  apk:{paths:[]},
+  apk:{paths:[],section:"install",appFilter:"all",appSearch:"",wifi:{status:null,endpoint:"",pairEndpoint:"",pairCode:""}},
   ipa:{path:"",validation:null,status:null},
   iphone:{status:null,section:"photos",view:"list",media:{photos:[],music:[]},apps:[],documents:[],bundleId:"",page:0,previews:{}},
   playstation:{paths:[],status:null},
@@ -188,12 +189,26 @@ const modules={
     }
   },
   apk:{
-    title:"APK",sub:"Choose and install APK, APKS/XAPK or split APK sets through ADB.",icon:"apk",
+    title:"APK",sub:"Install packages, manage installed apps and control Wi-Fi ADB.",icon:"apk",
     render(){
-      const d=data.android,paths=data.apk.paths,deviceLabel=d.serial||d.devices[0]?.serial||"Auto / first device";
+      const d=data.android,a=data.apk,paths=a.paths,deviceLabel=d.serial||d.devices[0]?.serial||"Auto / first device",section=a.section||"install";
+      const tabs=["install","apps","wifi"].map(x=>'<button class="sectiontab '+(section===x?"active":"")+'" data-cmd="apkSection" data-section="'+x+'">'+(x==="install"?"Install":x==="apps"?"Apps":"Wi-Fi ADB")+'</button>').join("");
+      let body="",side="";
+      if(section==="apps"){
+        const q=(a.appSearch||"").trim().toLowerCase(),filter=a.appFilter||"all";
+        const apps=d.apps.filter(app=>(filter==="all"||app.kind===filter)&&(!q||app.package.toLowerCase().includes(q)));
+        body='<div class="apk-app-tools"><input id="apkAppSearch" type="text" value="'+esc(a.appSearch||"")+'" placeholder="Search installed apps"><div class="viewbar apk-filter"><button class="view-btn '+(filter==="all"?"active":"")+'" data-cmd="apkAppFilter" data-filter="all">All</button><button class="view-btn '+(filter==="user"?"active":"")+'" data-cmd="apkAppFilter" data-filter="user">User</button><button class="view-btn '+(filter==="system"?"active":"")+'" data-cmd="apkAppFilter" data-filter="system">System</button></div></div><div class="app-list">'+(apps.length?apps.map(app=>'<div class="app-row"><div><b>'+esc(app.package)+'</b><span>'+esc(app.kind||"app")+'</span></div><button class="danger" data-cmd="appUninstall" data-package="'+esc(app.package)+'">Delete</button></div>').join(""):'<div class="empty-state">No matching apps loaded.</div>')+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkAppsRefresh">Refresh Apps</button></div>';
+      }else if(section==="wifi"){
+        const w=a.wifi||{},st=w.status||{},wireless=st.wireless_devices||[];
+        body='<div class="wifi-adb-grid"><div class="control"><label>Connect endpoint</label><input id="wifiEndpoint" type="text" value="'+esc(w.endpoint||"")+'" placeholder="192.168.1.25:5555"></div><div class="buttonbar"><button class="secondary" data-cmd="wifiStatus">Status</button><button class="primary" data-cmd="wifiEnable">Enable 5555</button><button class="secondary" data-cmd="wifiConnect">Connect</button><button class="secondary" data-cmd="wifiDisconnect">Disconnect</button><button class="secondary" data-cmd="wifiUsb">USB mode</button></div><div class="rows">'+row("ADB enabled",st.adb_enabled==="1"?"Android debugging enabled":"Unknown / off",st.adb_enabled==="1"?"ON":"Check",st.adb_enabled==="1"?"green":"")+row("Phone Wi-Fi",st.wlan_ip||"No wlan0 IPv4 read",st.tcp_port==="5555"?"TCP 5555":(wireless.length?wireless.length+" wireless":"USB"),wireless.length?"blue":"")+row("Wireless devices",wireless.map(x=>x.serial).join(", ")||"None connected",wireless.length?"Connected":"None",wireless.length?"green":"red")+'</div></div>';
+        side='<div class="card"><h3>Android 11+ Pairing</h3><p>On the phone open Wireless debugging, choose <b>Pair device with pairing code</b>, then enter the shown IP:port and code.</p><div class="control"><label>Pairing IP:port</label><input id="wifiPairEndpoint" type="text" value="'+esc(w.pairEndpoint||"")+'" placeholder="192.168.1.25:37123"></div><div class="control"><label>Pairing code</label><input id="wifiPairCode" type="text" value="'+esc(w.pairCode||"")+'" placeholder="123456" inputmode="numeric"></div><div class="buttonbar"><button class="primary" data-cmd="wifiPair">Pair</button></div><div class="rows" style="margin-top:12px">'+row("Selected device",deviceLabel,d.devices.length?"Connected":"Refresh ADB",d.devices.length?"green":"red")+row("Pair transport","Wireless debugging pairing",engineSnapshot?.capabilities?.adb_wifi_pair?"Ready":"Unavailable",engineSnapshot?.capabilities?.adb_wifi_pair?"green":"red")+'</div></div>';
+      }else{
+        body='<div class="share-path">'+esc(paths.length?paths.map(x=>x.split(/[\\\\/]/).pop()).join(" | "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose package</button><button class="primary" data-cmd="apkInstall">Install</button></div><div class="rows" style="margin-top:10px">'+row("Formats","APK / APKS / XAPK / split APK","Ready",d.devices.length?"green":"")+row("Selected files","Package set",String(paths.length),"")+'</div>';
+      }
+      const deviceCard='<div class="card"><h3>Device</h3><div class="rows">'+row("ADB backend","Queued outside the renderer",engineSnapshot?.capabilities?.adb?"Ready":"Unavailable",engineSnapshot?.capabilities?.adb?"green":"red")+row("Device",deviceLabel,d.devices.length?"Connected":"Refresh ADB",d.devices.length?"green":"red")+row("Installed apps",d.apps.length?d.apps.length+" listed":"Not loaded","All / user / system",d.apps.length?"green":"")+row("Wi-Fi ADB",engineSnapshot?.capabilities?.adb_wifi?"tcpip 5555 + connect":"Unavailable",engineSnapshot?.capabilities?.adb_wifi_pair?"Pair supported":"Check",engineSnapshot?.capabilities?.adb_wifi?"green":"red")+'</div></div>';
       return [
-        '<div class="card"><div class="device-toolbar">'+lumiDevicePicker(deviceLabel)+lumiAndroidTools(true)+'</div><div class="share-path">'+esc(paths.length?paths.map(x=>x.split(/[\\\\/]/).pop()).join(" | "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose package</button><button class="primary" data-cmd="apkInstall">Install</button></div><div class="rows" style="margin-top:10px">'+row("Formats","APK / APKS / XAPK / split APK","Ready",d.devices.length?"green":"")+row("Device",deviceLabel,d.devices.length?"Connected":"Refresh ADB",d.devices.length?"green":"red")+'</div></div>',
-        '<div class="card"><h3>Installer</h3><p>APK installation uses the same ADB engine as Android without duplicating the phone-content surface.</p><div class="rows" style="margin-top:10px">'+row("ADB backend","Queued outside the renderer",engineSnapshot?.capabilities?.adb?"Ready":"Unavailable",engineSnapshot?.capabilities?.adb?"green":"red")+row("Selected files","Package set",String(paths.length),"")+'</div></div>'
+        '<div class="card"><div class="sectiontabs three">'+tabs+'</div><div class="device-toolbar">'+lumiDevicePicker(deviceLabel)+lumiAndroidTools(true)+'</div>'+body+'</div>',
+        side||deviceCard
       ];
     }
   },
@@ -271,6 +286,9 @@ function lumiAndroidTools(apkMode=false){
     {value:"adbRefresh",label:"Refresh ADB",meta:"device"},
     {value:"appsRefresh",label:"Refresh Apps",meta:"packages"},
     {value:"androidRefreshMedia",label:"Refresh "+(section==="videos"?"Videos":"Photos"),meta:"media"},
+    {value:"wifiStatus",label:"Wi-Fi ADB status",meta:"wireless"},
+    {value:"wifiEnable",label:"Enable Wi-Fi ADB",meta:"tcpip 5555"},
+    {value:"wifiUsb",label:"Return ADB to USB",meta:"usb"},
     {value:"openApk",label:apkMode?"Android content":"APK installer",meta:apkMode?"phone":"install"}
   ];
   return lumiCombo("androidToolsCombo","Android tools",options,"android-tool");
@@ -357,13 +375,26 @@ function handleFinished(job){
   if(job.operation==="peer.configure"&&r.peer){data.pc.role=r.peer.role||data.pc.role;data.pc.scope=r.peer.scope||data.pc.scope;data.pc.sharedPaths=r.peer.shared_paths||data.pc.sharedPaths;const c=roleColor(data.pc.role);apply({connection:c});window.ttg.stateSet({connection:c});submit("peer.list",{},null,true)}
   if(job.operation==="peer.files.roots"){data.files.remoteRoots=r.roots||[];if(data.files.remoteRoots.length&&!data.files.remoteRoot){data.files.remoteRoot=String(data.files.remoteRoots[0].id);data.files.remotePath="";submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:""},"files",true)}}
   if(job.operation==="peer.files.list"){data.files.remoteRoot=String(r.root_id??data.files.remoteRoot);data.files.remotePath=r.path||"";data.files.remoteEntries=r.entries||[]}
-  if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial){submit("adb.info",{serial:data.android.serial},"android",true);if(currentModule==="android"){if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true)}}}
+  if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial){submit("adb.info",{serial:data.android.serial},currentModule,true);if(currentModule==="android"){if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true)}else if(currentModule==="apk"){if(data.apk.section==="apps")submit("adb.apps",{serial:data.android.serial},"apk",true);if(data.apk.section==="wifi")submit("adb.wifi.status",{serial:data.android.serial},"apk",true)}}}
   if(job.operation==="adb.info")data.android.info=r;
   if(job.operation==="adb.apps")data.android.apps=r.apps||[];
+  if(job.operation.startsWith("adb.wifi.")){
+    data.apk.wifi.status=r;
+    if(r.endpoint)data.apk.wifi.endpoint=r.endpoint;
+    else if(r.wlan_ip&&!data.apk.wifi.endpoint)data.apk.wifi.endpoint=r.wlan_ip+":5555";
+    if(Array.isArray(r.devices)){
+      data.android.devices=r.devices;
+      if(data.android.serial&&!r.devices.some(x=>x.serial===data.android.serial)){
+        const usb=r.devices.find(x=>x.state==="device"&&!x.serial.includes(":"));
+        data.android.serial=usb?.serial||r.devices.find(x=>x.state==="device")?.serial||"";
+      }
+    }
+    if(["adb.wifi.enable","adb.wifi.connect","adb.wifi.disconnect","adb.wifi.usb"].includes(job.operation))submit("adb.devices",{},currentModule,true);
+  }
   if(job.operation==="adb.media.list"&&r.kind)data.android.media[r.kind]=r.items||[];
   if(job.operation==="adb.media.preview"&&r.remote_path){data.android.previews[r.remote_path]=r.data_url||"";previewPending.delete("android:"+r.remote_path)}
   if(job.operation==="adb.media.delete"&&r.kind)submit("adb.media.list",{serial:data.android.serial,kind:r.kind},"android",true);
-  if(job.operation==="adb.uninstall"||job.operation==="adb.disable")submit("adb.apps",{serial:data.android.serial},"android",true);
+  if(job.operation==="adb.uninstall"||job.operation==="adb.disable")submit("adb.apps",{serial:data.android.serial},currentModule==="apk"?"apk":"android",true);
   if(job.operation==="ios.status"){if(meta.context==="ipa")data.ipa.status=r;else data.iphone.status=r}
   if(job.operation==="ios.validate"){data.ipa.validation=r;if(r.ok&&meta.context==="validate-install")submit("ios.ipa",{path:data.ipa.path},"ipa",false)}
   if(job.operation==="ios.apps")data.iphone.apps=r.apps||[];
@@ -387,6 +418,10 @@ window.ttg.onBackendEvent(evt=>{
 
 function wireControls(){
   const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)};
+  const apkSearch=$("#apkAppSearch");if(apkSearch)apkSearch.oninput=e=>{data.apk.appSearch=e.target.value;const q=data.apk.appSearch.trim().toLowerCase(),filter=data.apk.appFilter||"all";$$(".app-row").forEach(row=>{const pkg=(row.querySelector("b")?.textContent||"").toLowerCase(),kind=(row.querySelector("span")?.textContent||"").toLowerCase();row.style.display=((filter==="all"||kind===filter)&&(!q||pkg.includes(q)))?"":"none"})};
+  const wifiEndpoint=$("#wifiEndpoint");if(wifiEndpoint)wifiEndpoint.oninput=e=>data.apk.wifi.endpoint=e.target.value;
+  const wifiPairEndpoint=$("#wifiPairEndpoint");if(wifiPairEndpoint)wifiPairEndpoint.oninput=e=>data.apk.wifi.pairEndpoint=e.target.value;
+  const wifiPairCode=$("#wifiPairCode");if(wifiPairCode)wifiPairCode.oninput=e=>data.apk.wifi.pairCode=e.target.value;
   const filePeer=$("#fileRemotePeer");if(filePeer)filePeer.onchange=e=>{data.files.remotePeer=e.target.value;data.files.remoteRoots=[];data.files.remoteRoot="";data.files.remotePath="";data.files.remoteEntries=[];if(data.files.remotePeer)submit("peer.files.roots",{peer_id:data.files.remotePeer},"files",true);renderModule()};
   const fileRoot=$("#fileRemoteRoot");if(fileRoot)fileRoot.onchange=e=>{data.files.remoteRoot=e.target.value;data.files.remotePath="";data.files.remoteEntries=[];if(data.files.remotePeer&&data.files.remoteRoot!=="")submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:""},"files",true);renderModule()};
   $$("[data-lumi-combo]").forEach(host=>{
@@ -445,6 +480,15 @@ async function command(cmd,b){
   if(cmd==="adbRefresh"){submit("adb.devices",{},currentModule,true);return}
   if(cmd==="apkBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose Android package",multi:true,filters:[{name:"Android packages",extensions:["apk","apks","xapk"]}]});if(!r.canceled){data.apk.paths=r.paths;renderModule()}return}
   if(cmd==="apkInstall"){if(!data.apk.paths.length){toast("Choose an Android package first");return}submit("adb.install",{paths:data.apk.paths,serial:data.android.serial},"apk");return}
+  if(cmd==="apkSection"){data.apk.section=b.dataset.section||"install";renderModule();if(data.apk.section==="apps")submit("adb.apps",{serial:data.android.serial},"apk",true);if(data.apk.section==="wifi")submit("adb.wifi.status",{serial:data.android.serial},"apk",true);return}
+  if(cmd==="apkAppsRefresh"){submit("adb.apps",{serial:data.android.serial},"apk",true);return}
+  if(cmd==="apkAppFilter"){data.apk.appFilter=b.dataset.filter||"all";renderModule();return}
+  if(cmd==="wifiStatus"){submit("adb.wifi.status",{serial:data.android.serial},"apk",true);return}
+  if(cmd==="wifiEnable"){submit("adb.wifi.enable",{serial:data.android.serial},"apk");return}
+  if(cmd==="wifiConnect"){const endpoint=$("#wifiEndpoint")?.value.trim()||data.apk.wifi.endpoint||"";data.apk.wifi.endpoint=endpoint;submit("adb.wifi.connect",{endpoint},"apk");return}
+  if(cmd==="wifiDisconnect"){const endpoint=$("#wifiEndpoint")?.value.trim()||data.apk.wifi.endpoint||data.android.serial||"";data.apk.wifi.endpoint=endpoint;submit("adb.wifi.disconnect",{endpoint,serial:data.android.serial},"apk");return}
+  if(cmd==="wifiUsb"){submit("adb.wifi.usb",{serial:data.android.serial},"apk");return}
+  if(cmd==="wifiPair"){const endpoint=$("#wifiPairEndpoint")?.value.trim()||data.apk.wifi.pairEndpoint||"",code=$("#wifiPairCode")?.value.trim()||data.apk.wifi.pairCode||"";data.apk.wifi.pairEndpoint=endpoint;data.apk.wifi.pairCode=code;submit("adb.wifi.pair",{endpoint,code},"apk");return}
   if(cmd==="openApk"){openModule(currentModule==="apk"?"android":"apk");return}
   if(cmd==="appsRefresh"){data.android.section="apps";submit("adb.apps",{serial:data.android.serial},"android",true);renderModule();return}
   if(cmd==="androidRefreshMedia"){if(data.android.section==="apps")data.android.section="photos";submit("adb.media.list",{serial:data.android.serial,kind:data.android.section==="videos"?"videos":"photos"},"android",true);renderModule();return}
@@ -452,7 +496,7 @@ async function command(cmd,b){
   if(cmd==="androidView"){data.android.view=b.dataset.view==="large"?"large":"list";renderModule();return}
   if(cmd==="androidFileSave"){const dest=await window.ttg.dialog.openFolder({title:"Save Android content to PC"});if(dest.canceled)return;submit("adb.media.pull",{serial:data.android.serial,kind:b.dataset.kind||data.android.section,remote_path:b.dataset.path||"",destination:dest.path},"android");return}
   if(cmd==="androidFileDelete"){const kind=b.dataset.kind||data.android.section,path=b.dataset.path||"";if(!path||!confirm("Delete this item from the Android device?\\n\\n"+path))return;submit("adb.media.delete",{serial:data.android.serial,kind,remote_path:path},"android");return}
-  if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\\n\\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},"android");return}
+  if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\\n\\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},currentModule==="apk"?"apk":"android");return}
   if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.ipa.path=r.paths[0]||"";data.ipa.validation=null;renderModule()}return}
   if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
   if(cmd==="ipaStatus"){submit("ios.status",{},"ipa",true);return}

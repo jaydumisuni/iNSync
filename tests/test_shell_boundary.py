@@ -263,5 +263,48 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn("scrollbar-width:none", renderer)
 
 
+    def test_apk_surface_lists_apps_and_exposes_wifi_adb_controls(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'data-cmd="apkSection"',
+            '["install","apps","wifi"]',
+            'id="apkAppSearch"',
+            'data-cmd="apkAppsRefresh"',
+            'data-cmd="apkAppFilter"',
+            'data-cmd="appUninstall"',
+            'data-cmd="wifiStatus"',
+            'data-cmd="wifiEnable"',
+            'data-cmd="wifiConnect"',
+            'data-cmd="wifiDisconnect"',
+            'data-cmd="wifiUsb"',
+            'data-cmd="wifiPair"',
+            'id="wifiPairEndpoint"',
+            'id="wifiPairCode"',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            '"adb.wifi.status"',
+            '"adb.wifi.enable"',
+            '"adb.wifi.connect"',
+            '"adb.wifi.disconnect"',
+            '"adb.wifi.usb"',
+            '"adb.wifi.pair"',
+            '"adb_wifi": bool(adb)',
+            '"adb_wifi_pair": bool(adb)',
+        ):
+            self.assertIn(token, backend)
+
+    def test_wifi_adb_contract_matches_device_manager_evidence(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        self.assertIn('["tcpip", "5555"]', backend)
+        self.assertIn('["shell", "ip", "-f", "inet", "addr", "show", "wlan0"]', backend)
+        self.assertIn('[adb, "connect", endpoint]', backend)
+        self.assertIn('[adb, "pair", endpoint, code]', backend)
+        self.assertIn("Android 11+ Pairing", renderer)
+        self.assertIn("Pair device with pairing code", renderer)
+
+
 if __name__ == "__main__":
     unittest.main()

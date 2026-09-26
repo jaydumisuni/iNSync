@@ -6,7 +6,7 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "ecdc1a75282326c0bbafc8e064f7ba745bb6791920f21ef5e53213fb6da3a36a",
+    "sha256": "8c2a4009316669af4e3c85ae0a9d48e189a43fbb6afc215534d73bf71e1fb9f1",
     "widget": "renderer/widget.html",
     "widgetSha256": "23410c1a4670ba189c2a3317bfcc39f8aef7c11cb653c6f5aff3cb599c52cac7"
   },
@@ -15,7 +15,7 @@
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "b99e86bb0e3b77a0cbc257b3f52b070117186a1d2264558b90dcfb5362c23d00",
+    "sha256": "00659eb9428cabcca7a2956042de4b49279dbd044a6233b0e931b126da964fe0",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
@@ -31,7 +31,11 @@
       "androidMediaPreview": true,
       "iosMediaPreview": true,
       "peerFiles": true,
-      "peerFileBrowse": true
+      "peerFileBrowse": true,
+      "apkAppManager": true,
+      "adbWifi": true,
+      "adbWifiPair": true,
+      "nonblockingProcessCapture": true
     }
   },
   "handoff": {
