@@ -6,7 +6,7 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "8c2a4009316669af4e3c85ae0a9d48e189a43fbb6afc215534d73bf71e1fb9f1",
+    "sha256": "6a53c668c1e1ce149954a343a50c8a4840f5e94af9580ca26ec3493a00e6324e",
     "widget": "renderer/widget.html",
     "widgetSha256": "23410c1a4670ba189c2a3317bfcc39f8aef7c11cb653c6f5aff3cb599c52cac7"
   },

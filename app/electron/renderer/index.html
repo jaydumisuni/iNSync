@@ -337,7 +337,8 @@ function renderModule(){
 }
 function openModule(key){
   currentModule=key;renderModule();$("#backdrop").classList.add("open");
-  if(key==="home")refreshEngine();
+  if(!engineSnapshot)refreshEngine();
+  else if(key==="home")refreshEngine();
   if(key==="sharing")submit("sharing.status",{},"sharing",true);
   if(key==="android"||key==="apk")submit("adb.devices",{},key,true);
   if(key==="pc"||key==="clipboard"||key==="files")submit("peer.list",{},key,true);
@@ -364,7 +365,11 @@ async function submit(operation,params={},context=null,quiet=false){
   }catch(e){toast(e.message||"Engine unavailable");return ""}
 }
 async function refreshEngine(){
-  try{engineSnapshot=await window.ttg.backend.invoke("app.snapshot",{});if(currentModule==="home")renderModule()}catch(e){toast(e.message||"Engine unavailable")}
+  try{
+    engineSnapshot=await window.ttg.backend.invoke("app.snapshot",{});
+    if(currentModule==="home"||$("#backdrop").classList.contains("open"))renderModule();
+    return engineSnapshot;
+  }catch(e){toast(e.message||"Engine unavailable");return null}
 }
 function handleFinished(job){
   updateRemembered(job);const meta=jobs.get(job.id)||{},r=job.result||{};if(job.id===activeJob)setJob(job);
@@ -524,7 +529,7 @@ $("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");
 $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#backdrop").classList.remove("open")});
-(async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(apply);apply(state)})();
+(async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(apply);apply(state);await refreshEngine()})();
 </script>
 </body>
 </html>

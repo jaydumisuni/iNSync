@@ -306,5 +306,12 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn("Pair device with pairing code", renderer)
 
 
+    def test_renderer_refreshes_backend_capabilities_on_start_and_module_open(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('if(!engineSnapshot)refreshEngine()', renderer)
+        self.assertIn('$("#backdrop").classList.contains("open")', renderer)
+        self.assertIn('apply(state);await refreshEngine()', renderer)
+
+
 if __name__ == "__main__":
     unittest.main()
