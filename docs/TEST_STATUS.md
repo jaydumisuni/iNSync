@@ -146,3 +146,18 @@ The graphical installer pipeline has already passed readiness, creation, package
 - To coexist with TechGuy-IMEI's active legacy ADB polling, classic/USB operations retain ecosystem port 5037 while modern Wireless Debugging runs on isolated ADB server port 5041.
 - Ports 5037 and 5041 were proved listening concurrently without killing each other.
 - Final isolated-server device operation is pending one phone-side RSA approval because a new host ADB key was generated during the version-transition proof.
+
+## UI/media completion - 2026-09-26
+
+- Both modal columns are independently scrollable when their content exceeds the popup height.
+- Scrollbars remain visually hidden while wheel/trackpad scrolling remains active.
+- Popup backdrop no longer paints a full-screen dark veil; transparent/empty regions stay transparent.
+- Popup module/logo drop-shadow halos that created empty visual ghosts were removed.
+- Android and APK app lists lazy-load package artwork from the installed APK base package.
+- App-icon extraction was proved against the owned TTG ADB Enabler APK: a real PNG resource was recovered.
+- Android video Large view now requests a decoded video frame rather than a generic VIDEO placeholder.
+- iPhone now has a dedicated Videos section and uses the same frame-preview pipeline.
+- Video-frame decoding was proved through FFmpeg with a valid JPEG output.
+- The minimized clipboard widget now renders approved peers as a hidden-scroll list with a per-peer x removal action.
+- The widget peer removal path removes the peer from clipboard targets, revokes approval, and refreshes the list.
+- Current product regression suite: 41/41 PASS.

@@ -11,7 +11,7 @@ iNSync uses one transport core with capability-gated adapters for:
 - Streamed iNSync peer file send, remote shared-root browse and receive
 - Local, mapped-drive and UNC file transfer
 - Approved-peer text/image clipboard sync, including automatic copy-here/paste-there mode, including automatic copy-here/paste-there mode
-- Android phone content through ADB: Photos, Videos and Apps
+- Android phone content through ADB: Photos, Videos and Apps, including real video-frame previews and installed-app artwork
 - A separate APK surface for APK/APKS/XAPK/split installs, installed-app listing/delete and Get-to-PC export
 - IPA validation/install as its own Apple package surface
 - iPhone Photos, Music export, installed apps and app Documents

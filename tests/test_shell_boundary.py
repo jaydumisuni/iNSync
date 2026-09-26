@@ -50,7 +50,7 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('title:"IPA"', renderer)
         self.assertIn('title:"iPhone"', renderer)
         for token in (
-            'const labels={photos:"Photos",music:"Music",apps:"Apps",documents:"App Documents"}',
+            'const labels={photos:"Photos",videos:"Videos",music:"Music",apps:"Apps",documents:"App Documents"}',
             'data-cmd="iphoneSection"',
             'data-cmd="iphoneAppDelete"',
             'data-cmd="iphoneDocSend"',
@@ -413,6 +413,78 @@ class ShellBoundaryTests(unittest.TestCase):
         runtime = ROOT / "resources" / "android-platform-tools"
         for name in ("adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll"):
             self.assertTrue((runtime / name).is_file(), name)
+
+
+    def test_popup_panels_scroll_independently_without_visible_scrollbars(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            ".modal-body>.card{overflow-y:auto!important",
+            ".modal-body>.card::-webkit-scrollbar{display:none!important",
+            ".modal-body.single{grid-template-columns:1fr}",
+            "body.classList.toggle(\"single\",parts.length===1)",
+        ):
+            self.assertIn(token, renderer)
+        self.assertIn(".backdrop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:transparent;backdrop-filter:none", renderer)
+        self.assertIn(".modal-title img{width:64px;height:64px;object-fit:contain;filter:none}", renderer)
+        self.assertIn(".logo{position:absolute", renderer)
+        self.assertNotIn(".logo{position:absolute;left:42.2%;bottom:3.2%;width:15.6%;height:auto;z-index:8;pointer-events:none;filter:drop-shadow", renderer)
+
+    def test_android_apps_lazy_load_real_package_icons(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            "function appIconFor(app)",
+            'class="app-icon"',
+            "app-icon-needed",
+            'submit("adb.app.icon"',
+            'data.android.appIcons',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            "def adb_app_icon_job(",
+            "def _apk_icon_data_url(",
+            '["shell", "pm", "path", package]',
+            '"adb.app.icon": adb_app_icon_job',
+            '"adb_app_icons": bool(adb)',
+        ):
+            self.assertIn(token, backend)
+
+    def test_phone_video_surfaces_use_lazy_real_frame_previews(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        config = (ROOT / "techguy-build.json").read_text(encoding="utf-8")
+        for token in (
+            "data-preview-kind=\"'+esc(kind)+'\"",
+            'const labels={photos:"Photos",videos:"Videos",music:"Music",apps:"Apps",documents:"App Documents"}',
+            'const tabs=["photos","videos","music","apps","documents"]',
+            'section==="photos"||section==="videos"',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            "def _video_frame_from_command(",
+            "def _video_frame_from_file(",
+            'if kind == "videos":',
+            '"videos": "DCIM"',
+            "IOS_VIDEO_EXTS",
+            '"media_video_preview": bool(ffmpeg_path())',
+        ):
+            self.assertIn(token, backend)
+        self.assertIn('"imageio-ffmpeg>=0.5,<1"', config)
+        self.assertIn('"imageio_ffmpeg"', config)
+
+    def test_widget_peer_list_scrolls_and_each_peer_can_be_removed(self):
+        widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        for token in (
+            'id="peerList"',
+            ".peer-list{display:grid",
+            "overflow-y:auto",
+            "scrollbar-width:none",
+            "data-peer-remove",
+            'submit("peer.approve",{peer_id:id,approved:false})',
+            'if(job.operation==="peer.approve")refreshPeers()',
+        ):
+            self.assertIn(token, widget)
+        self.assertNotIn('id="peerText"', widget)
 
 
 if __name__ == "__main__":

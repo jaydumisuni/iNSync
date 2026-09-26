@@ -86,6 +86,22 @@ def adb_path() -> str | None:
     return shutil.which("adb") or adb_modern_path()
 
 
+def ffmpeg_path() -> str | None:
+    override = os.environ.get("INSYNC_FFMPEG_PATH", "").strip()
+    if override and Path(override).is_file():
+        return override
+    try:
+        import imageio_ffmpeg
+        candidate = imageio_ffmpeg.get_ffmpeg_exe()
+        if candidate and Path(candidate).is_file():
+            return str(Path(candidate).resolve())
+    except Exception:
+        pass
+    return shutil.which("ffmpeg")
+
+
+
+
 def _adb_modern_base() -> list[str]:
     adb = adb_modern_path()
     if not adb:
@@ -802,6 +818,117 @@ def adb_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     }
 
 
+
+APP_ICON_CACHE: dict[str, str] = {}
+
+
+def _apk_icon_candidate_score(name: str, size: int) -> int:
+    value = name.replace("\\", "/").lower()
+    suffix = Path(value).suffix
+    if suffix not in {".png", ".webp", ".jpg", ".jpeg"}:
+        return -1
+    if "/res/" not in "/" + value:
+        return -1
+    base = Path(value).stem.lower()
+    score = 0
+    if "mipmap" in value:
+        score += 80
+    elif "drawable" in value:
+        score += 45
+    if any(token in base for token in ("ic_launcher", "launcher", "app_icon", "application_icon")):
+        score += 180
+    elif base in {"icon", "ic_icon"} or base.endswith("_icon"):
+        score += 140
+    elif "icon" in base:
+        score += 80
+    elif "logo" in base:
+        score += 50
+    else:
+        return -1
+    if "xxxhdpi" in value:
+        score += 45
+    elif "xxhdpi" in value:
+        score += 35
+    elif "xhdpi" in value:
+        score += 25
+    elif "hdpi" in value:
+        score += 15
+    if "foreground" in base:
+        score -= 12
+    if "background" in base:
+        score -= 35
+    score += min(40, max(0, int(size).bit_length() - 9))
+    return score
+
+
+def _apk_icon_data_url(apk_path: Path) -> str:
+    with zipfile.ZipFile(apk_path) as zf:
+        candidates: list[tuple[int, int, str]] = []
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            score = _apk_icon_candidate_score(info.filename, info.file_size)
+            if score >= 0:
+                candidates.append((score, info.file_size, info.filename))
+        if not candidates:
+            return ""
+        _, _, name = max(candidates)
+        raw = zf.read(name)
+        suffix = Path(name).suffix.lower()
+        mime = {
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+        }.get(suffix, "application/octet-stream")
+        return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
+def adb_app_icon_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    package = str(job.params.get("package") or "").strip()
+    serial = str(job.params.get("serial") or "")
+    if not package or not re.fullmatch(r"[A-Za-z0-9._]+", package):
+        return unavailable("Choose a valid Android package", package=package)
+    key = f"{serial}|{package}"
+    if key in APP_ICON_CACHE:
+        return ok("Android app icon ready", package=package, data_url=APP_ICON_CACHE[key], cached=True)
+
+    engine.progress(job, 12, f"Reading icon for {package}")
+    rc, out, err = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "pm", "path", package],
+        timeout=25,
+    )
+    if rc != 0:
+        return unavailable(err or out or "Could not read package path", package=package)
+    paths = [
+        line[len("package:"):].strip()
+        for line in out.splitlines()
+        if line.strip().startswith("package:")
+    ]
+    base_remote = next((value for value in paths if value.endswith("/base.apk")), paths[0] if paths else "")
+    if not base_remote:
+        return unavailable("Android returned no APK path", package=package)
+
+    with tempfile.TemporaryDirectory(prefix="insync-app-icon-") as td:
+        local_apk = Path(td) / "base.apk"
+        rc2, out2, err2 = run_process(
+            job,
+            _adb_prefix(serial) + ["pull", base_remote, str(local_apk)],
+            timeout=120,
+        )
+        if rc2 != 0 or not local_apk.is_file():
+            return unavailable(err2 or out2 or "Could not read package APK", package=package)
+        try:
+            data_url = _apk_icon_data_url(local_apk)
+        except Exception as exc:
+            return unavailable(f"Could not extract app icon: {exc}", package=package)
+    if not data_url:
+        return unavailable("No raster app icon found in the package", package=package)
+    APP_ICON_CACHE[key] = data_url
+    return ok("Android app icon ready", package=package, data_url=data_url, cached=False)
+
+
 def _adb_ready_serial(serial: str = "") -> str:
     data = adb_devices_data()
     devices = [row for row in data.get("devices", []) if row.get("state") == "device"]
@@ -1087,6 +1214,102 @@ def adb_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     }
 
 
+
+def _video_frame_from_command(job: Job, source_cmd: list[str], timeout: float = 45) -> tuple[bytes, str]:
+    ffmpeg = ffmpeg_path()
+    if not ffmpeg:
+        return b"", "FFmpeg video preview runtime is unavailable"
+    source_err = tempfile.TemporaryFile()
+    frame_out = tempfile.TemporaryFile()
+    frame_err = tempfile.TemporaryFile()
+    source = None
+    decoder = None
+    try:
+        source = subprocess.Popen(
+            source_cmd,
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=source_err,
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
+        )
+        if source.stdout is None:
+            return b"", "Could not open media stream"
+        decoder = subprocess.Popen(
+            [
+                ffmpeg, "-hide_banner", "-loglevel", "error",
+                "-i", "pipe:0",
+                "-ss", "0.20",
+                "-frames:v", "1",
+                "-vf", "scale=480:-2:force_original_aspect_ratio=decrease",
+                "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
+            ],
+            shell=False,
+            stdin=source.stdout,
+            stdout=frame_out,
+            stderr=frame_err,
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
+        )
+        source.stdout.close()
+        started = time.time()
+        while decoder.poll() is None:
+            if job.cancel.is_set():
+                for proc in (decoder, source):
+                    if proc and proc.poll() is None:
+                        proc.kill()
+                raise Cancelled()
+            if time.time() - started > timeout:
+                for proc in (decoder, source):
+                    if proc and proc.poll() is None:
+                        proc.kill()
+                return b"", f"Video preview timed out after {timeout:g}s"
+            time.sleep(0.05)
+        if source.poll() is None:
+            source.terminate()
+            try:
+                source.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                source.kill()
+        frame_out.seek(0)
+        frame_err.seek(0)
+        data = frame_out.read()
+        error = frame_err.read().decode("utf-8", errors="replace").strip()
+        if decoder.returncode != 0 or not data:
+            source_err.seek(0)
+            source_error = source_err.read().decode("utf-8", errors="replace").strip()
+            return b"", error or source_error or "Could not decode video frame"
+        return data, ""
+    finally:
+        for proc in (decoder, source):
+            if proc and proc.poll() is None:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        source_err.close()
+        frame_out.close()
+        frame_err.close()
+
+
+def _video_frame_from_file(job: Job, source: Path, timeout: float = 45) -> tuple[bytes, str]:
+    ffmpeg = ffmpeg_path()
+    if not ffmpeg:
+        return b"", "FFmpeg video preview runtime is unavailable"
+    rc, raw, err = run_process_bytes(
+        job,
+        [
+            ffmpeg, "-hide_banner", "-loglevel", "error",
+            "-i", str(source),
+            "-ss", "0.20",
+            "-frames:v", "1",
+            "-vf", "scale=480:-2:force_original_aspect_ratio=decrease",
+            "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
+        ],
+        timeout=timeout,
+        max_bytes=3 * 1024 * 1024,
+    )
+    return (raw, "") if rc == 0 and raw else (b"", err or "Could not decode video frame")
+
+
 def _android_preview_mime(path: str) -> str:
     suffix = Path(path).suffix.lower()
     return {
@@ -1104,9 +1327,27 @@ def adb_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     remote = str(job.params.get("remote_path") or "").strip()
     serial = str(job.params.get("serial") or "")
     kind = str(job.params.get("kind") or "photos").lower()
+    if not remote:
+        return unavailable("Choose Android media before previewing it", kind=kind)
+    if kind == "videos":
+        engine.progress(job, 18, "Reading Android video frame")
+        raw, err = _video_frame_from_command(
+            job,
+            _adb_prefix(serial) + ["exec-out", "cat", remote],
+            timeout=50,
+        )
+        if not raw:
+            return unavailable(err or "Could not read Android video frame", kind=kind, remote_path=remote)
+        return ok(
+            "Android video frame ready",
+            kind=kind,
+            remote_path=remote,
+            data_url=f"data:image/jpeg;base64,{base64.b64encode(raw).decode('ascii')}",
+        )
+
     mime = _android_preview_mime(remote)
-    if not remote or not mime:
-        return unavailable("Preview is available for Android image files only", remote_path=remote)
+    if not mime:
+        return unavailable("Preview is unavailable for this Android image", kind=kind, remote_path=remote)
     engine.progress(job, 18, "Reading Android image preview")
     rc, raw, err = run_process_bytes(
         job,
@@ -1115,7 +1356,7 @@ def adb_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         max_bytes=8 * 1024 * 1024,
     )
     if rc != 0 or not raw:
-        return unavailable(err or "Could not read Android image preview", remote_path=remote)
+        return unavailable(err or "Could not read Android image preview", kind=kind, remote_path=remote)
     return ok(
         "Android preview ready",
         kind=kind,
@@ -2488,9 +2729,11 @@ def ios_app_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 IOS_MEDIA_ROOTS = {
     "photos": "DCIM",
+    "videos": "DCIM",
     "music": "iTunes_Control/Music",
 }
-IOS_PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png", ".dng", ".mov", ".mp4", ".aae"}
+IOS_PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png", ".dng", ".aae"}
+IOS_VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".3gp"}
 IOS_MUSIC_EXTS = {".mp3", ".m4a", ".aac", ".alac", ".wav", ".aiff", ".flac", ".mp4"}
 
 
@@ -2513,7 +2756,7 @@ async def _ios_media_list_pmd(kind: str, serial: str = "", limit: int = 240) -> 
     from pymobiledevice3.services.afc import AfcService
 
     root = _ios_media_root(kind)
-    allowed = IOS_PHOTO_EXTS if kind == "photos" else IOS_MUSIC_EXTS
+    allowed = IOS_PHOTO_EXTS if kind == "photos" else IOS_VIDEO_EXTS if kind == "videos" else IOS_MUSIC_EXTS
     rows: list[dict[str, Any]] = []
     async with await _pmd_lockdown(serial) as lockdown:
         async with AfcService(lockdown=lockdown) as afc:
@@ -2575,14 +2818,48 @@ async def _ios_media_preview_pmd(kind: str, remote_path: str, serial: str = "") 
             return await afc.get_file_contents(remote)
 
 
+async def _ios_video_preview_pmd(job: Job, remote_path: str, serial: str = "") -> tuple[bytes, str]:
+    from pymobiledevice3.services.afc import AfcService
+
+    remote = _ios_scoped_remote("videos", remote_path)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with AfcService(lockdown=lockdown) as afc:
+            info = await afc.stat(remote)
+            size = int(info.get("st_size") or 0)
+            if size > 1024 * 1024 * 1024:
+                return b"", "Video is larger than the 1 GB inline-preview limit"
+            with tempfile.TemporaryDirectory(prefix="insync-ios-video-") as td:
+                target = Path(td) / (posixpath.basename(remote) or "preview.mov")
+                await afc.pull(remote, str(target))
+                return _video_frame_from_file(job, target, timeout=60)
+
+
 def ios_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     kind = str(job.params.get("kind") or "photos").lower()
     remote_path = str(job.params.get("remote_path") or "")
-    mime = _ios_preview_mime(remote_path)
-    if kind != "photos" or not remote_path or not mime:
-        return unavailable("Preview is available for iPhone image files only", kind=kind, remote_path=remote_path)
+    if not remote_path:
+        return unavailable("Choose iPhone media before previewing it", kind=kind)
     if not _pmd_available():
-        return unavailable("Photo preview requires the bundled Apple device bridge", kind=kind, remote_path=remote_path)
+        return unavailable("Media preview requires the bundled Apple device bridge", kind=kind, remote_path=remote_path)
+
+    if kind == "videos":
+        engine.progress(job, 18, "Reading iPhone video frame")
+        try:
+            raw, err = _run_async(_ios_video_preview_pmd(job, remote_path, str(job.params.get("serial") or "")))
+            if not raw:
+                return unavailable(err or "Could not read iPhone video frame", kind=kind, remote_path=remote_path)
+            return ok(
+                "iPhone video frame ready",
+                kind=kind,
+                remote_path=remote_path,
+                data_url=f"data:image/jpeg;base64,{base64.b64encode(raw).decode('ascii')}",
+            )
+        except Exception as exc:
+            return unavailable(f"Could not read iPhone video frame: {exc}", kind=kind, remote_path=remote_path)
+
+    mime = _ios_preview_mime(remote_path)
+    if kind != "photos" or not mime:
+        return unavailable("Preview is unavailable for this iPhone item", kind=kind, remote_path=remote_path)
     engine.progress(job, 18, "Reading iPhone photo preview")
     try:
         raw = _run_async(_ios_media_preview_pmd(kind, remote_path, str(job.params.get("serial") or "")))
@@ -2844,6 +3121,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.devices": adb_devices_job,
     "adb.info": adb_info_job,
     "adb.apps": adb_apps_job,
+    "adb.app.icon": adb_app_icon_job,
     "adb.wifi.status": adb_wifi_status_job,
     "adb.wifi.enable": adb_wifi_enable_job,
     "adb.wifi.connect": adb_wifi_connect_job,
@@ -2903,6 +3181,8 @@ def snapshot() -> dict[str, Any]:
             "adb_wifi": bool(adb) and bool(modern_adb),
             "adb_wifi_pair": bool(modern_adb),
             "adb_app_export": bool(adb),
+            "adb_app_icons": bool(adb),
+            "media_video_preview": bool(ffmpeg_path()),
             "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),
             "ios_bridge": _pmd_available(),

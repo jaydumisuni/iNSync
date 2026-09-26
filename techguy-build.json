@@ -46,6 +46,12 @@
           "pymobiledevice3.services.afc",
           "pymobiledevice3.services.house_arrest",
           "pymobiledevice3.services.installation_proxy"
+        ],
+        "extraRequirements": [
+          "imageio-ffmpeg>=0.5,<1"
+        ],
+        "collectAll": [
+          "imageio_ffmpeg"
         ]
       }
     ],

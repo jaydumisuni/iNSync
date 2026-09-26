@@ -345,5 +345,39 @@ class EngineProtocolTests(unittest.TestCase):
         self.assertEqual(result["services"][1]["endpoint"], "192.168.1.20:40555")
 
 
+    def test_apk_icon_picker_prefers_launcher_raster(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_icon_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(prefix="insync-icon-") as td:
+            apk = Path(td) / "demo.apk"
+            import zipfile
+            with zipfile.ZipFile(apk, "w") as zf:
+                zf.writestr("res/drawable/logo.png", b"LOGO")
+                zf.writestr("res/mipmap-xxxhdpi/ic_launcher.png", b"LAUNCHER")
+                zf.writestr("res/mipmap-hdpi/ic_launcher_foreground.png", b"FOREGROUND")
+            data_url = module._apk_icon_data_url(apk)
+        self.assertTrue(data_url.startswith("data:image/png;base64,"))
+        import base64
+        self.assertEqual(base64.b64decode(data_url.split(",", 1)[1]), b"LAUNCHER")
+
+    def test_video_preview_helpers_are_ffmpeg_backed_and_cancellable(self):
+        backend = BACKEND.read_text(encoding="utf-8")
+        for token in (
+            "def ffmpeg_path()",
+            "import imageio_ffmpeg",
+            "def _video_frame_from_command(",
+            "def _video_frame_from_file(",
+            'job.cancel.is_set()',
+            '"-frames:v", "1"',
+            '"image2pipe"',
+            '"mjpeg"',
+        ):
+            self.assertIn(token, backend)
+
+
 if __name__ == "__main__":
     unittest.main()

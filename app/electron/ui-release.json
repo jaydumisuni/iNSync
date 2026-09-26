@@ -6,16 +6,16 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "65a19927218ffac2ec21b0766f1089df72fc493eaa19856dfb20f4c9ce3e8bcc",
+    "sha256": "e6d6fc8bb7347229c344232c1ec10457aeb9c28b077711c04d4594bb569b2e4e",
     "widget": "renderer/widget.html",
-    "widgetSha256": "f1ee6e6a730cab115a22cd8a510016804eccb897ba4298add53eaa6a38b97d6a"
+    "widgetSha256": "d91bf19431fe92c4801b9eaac8d48be3e24b9cebde0f0a578dea4fc9c19d3802"
   },
   "backend": {
     "manifest": "backend-manifest.json",
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "e94d9bd55eae11aaffec3d956376fab7b5248a4e9752994f47989b4ca893143b",
+    "sha256": "55af533aa9a7602b386919f64192e03831631b4ed10a46589ef6c1550f4887e1",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
@@ -41,7 +41,12 @@
       "adbMdns": true,
       "bundledAdb": "1.0.41 / 36.0.2",
       "modernAdbServerPort": 5041,
-      "largeOutputDeadlockFix": true
+      "largeOutputDeadlockFix": true,
+      "androidAppIcons": true,
+      "androidVideoFrames": true,
+      "iosVideoFrames": true,
+      "independentPanelScroll": true,
+      "widgetPeerRemoval": true
     }
   },
   "handoff": {
