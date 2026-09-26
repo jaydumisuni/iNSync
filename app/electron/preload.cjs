@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("ttg",Object.freeze({
   runtime:()=>ipcRenderer.invoke("insync:runtime"),
   windowControl:(action)=>ipcRenderer.invoke("insync:window",action),
   widgetMinimize:()=>ipcRenderer.invoke("insync:widget:minimize"),
+  widgetExpand:(expanded)=>ipcRenderer.invoke("insync:widget:expand",!!expanded),
   showMain:()=>ipcRenderer.invoke("insync:main:show"),
   stateGet:()=>ipcRenderer.invoke("insync:state:get"),
   stateSet:(patch)=>ipcRenderer.invoke("insync:state:set",patch||{}),

@@ -149,16 +149,98 @@ class ShellBoundaryTests(unittest.TestCase):
 
     def test_widget_stays_expanded_during_interaction(self):
         widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        preload = (ROOT / "app" / "electron" / "preload.cjs").read_text(encoding="utf-8")
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
         for token in (
-            '#shell:hover #card,#card.expanded,#card:focus-within',
             '#card{-webkit-app-region:no-drag',
             '.top{-webkit-app-region:drag',
             'function expandWidget()',
-            'card.addEventListener("pointerdown",expandWidget)',
-            'card.addEventListener("focusin",expandWidget)',
+            'window.ttg.widgetExpand(true)',
+            'window.ttg.widgetExpand(false)',
+            'shell.addEventListener("pointerenter"',
+            'shell.addEventListener("pointerleave"',
             'collapseTimer=setTimeout',
+            'id="edgeClose"',
         ):
             self.assertIn(token, widget)
+        self.assertIn('widgetExpand:(expanded)=>ipcRenderer.invoke("insync:widget:expand",!!expanded)', preload)
+        self.assertIn('ipcMain.handle("insync:widget:expand"', main)
+        self.assertNotIn('transform:translateX(181px)', widget)
+
+    def test_widget_edge_position_and_clipboard_settings_persist_across_restart(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        for token in (
+            'WIDGET_HANDLE=11',
+            'insync-state.json',
+            'widgetDock={edge:"right",y:null,displayId:null}',
+            'screen.getDisplayMatching(bounds)',
+            'persistDockFromWindow()',
+            'widgetWindow.on("moved"',
+            'app.setLoginItemSettings({openAtLogin:true',
+            '"--insync-startup"',
+            'if(action==="close"){showWidget(false)',
+        ):
+            self.assertIn(token, main)
+        for token in (
+            'id="autoClipboard"',
+            'clipboardAuto',
+            'clipboardTargets',
+            'window.ttg.stateSet({mode:"clipboard"',
+        ):
+            self.assertIn(token, widget)
+
+    def test_apk_apps_have_fixed_get_and_delete_actions(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'data-cmd="appGet"',
+            '>Get</button><button class="danger mini" data-cmd="appUninstall"',
+            '.app-actions{display:flex',
+            'overflow-wrap:anywhere',
+            '"adb.app.export"',
+            'def adb_app_export_job(',
+            '["shell", "pm", "path", package]',
+        ):
+            self.assertIn(token, renderer if token.startswith(("data-", ">", ".", "overflow")) else backend)
+
+    def test_media_scrollbars_are_hidden_and_photo_placeholders_are_not_labels(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            '::-webkit-scrollbar{display:none!important',
+            'scrollbar-width:none!important',
+            'class="media-placeholder media-preview-needed"',
+            'IntersectionObserver',
+            'requestPreviewNode',
+            'data-preview-platform',
+        ):
+            self.assertIn(token, renderer)
+        self.assertNotIn('kind==="photos"?"PHOTO"', renderer)
+
+    def test_auto_clipboard_is_main_process_owned_and_persistent(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            'clipboardAuto:false',
+            'clipboardTargets:[]',
+            'setInterval(()=>{clipboardTick()},450)',
+            'queueClipboardOperation("clipboard.text"',
+            'queueClipboardOperation("clipboard.image"',
+            'clipboard.writeText(event.text)',
+            'clipboard.writeImage(image)',
+            'saveRuntimeState()',
+        ):
+            self.assertIn(token, main)
+        self.assertIn('Auto clipboard', renderer)
+        self.assertIn('data-cmd="clipAll"', renderer)
+
+    def test_sharing_elevation_has_no_visible_powershell_launcher(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        sharing = backend.split("def sharing_toggle", 1)[1].split("def sharing_status_job", 1)[0]
+        self.assertIn("ShellExecuteExW", backend)
+        self.assertIn("SW_HIDE = 0", backend)
+        self.assertIn("_run_elevated_hidden(", sharing)
+        self.assertNotIn("Start-Process -FilePath 'powershell.exe'", sharing)
 
 
     def test_android_content_and_apk_are_separate_surfaces_with_shared_adb_engine(self):

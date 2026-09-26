@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ctypes
 import hashlib
 import importlib.util
 import json
 import os
 import plistlib
 import posixpath
+import re
 import queue
 import shutil
 import socket
@@ -495,6 +497,96 @@ try {{
     return script_path, result_path
 
 
+def _run_elevated_hidden(
+    job: Job,
+    executable: str,
+    args: list[str],
+    *,
+    timeout: float = 180,
+) -> tuple[int, str]:
+    if sys.platform != "win32":
+        raise RuntimeError("elevated Windows launch requested on non-Windows platform")
+
+    from ctypes import wintypes
+
+    SEE_MASK_NOCLOSEPROCESS = 0x00000040
+    SW_HIDE = 0
+    WAIT_OBJECT_0 = 0x00000000
+    WAIT_TIMEOUT = 0x00000102
+    ERROR_CANCELLED = 1223
+
+    class SHELLEXECUTEINFOW(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("fMask", ctypes.c_ulong),
+            ("hwnd", wintypes.HWND),
+            ("lpVerb", wintypes.LPCWSTR),
+            ("lpFile", wintypes.LPCWSTR),
+            ("lpParameters", wintypes.LPCWSTR),
+            ("lpDirectory", wintypes.LPCWSTR),
+            ("nShow", ctypes.c_int),
+            ("hInstApp", wintypes.HINSTANCE),
+            ("lpIDList", wintypes.LPVOID),
+            ("lpClass", wintypes.LPCWSTR),
+            ("hkeyClass", wintypes.HKEY),
+            ("dwHotKey", wintypes.DWORD),
+            ("hIconOrMonitor", wintypes.HANDLE),
+            ("hProcess", wintypes.HANDLE),
+        ]
+
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    shell32.ShellExecuteExW.argtypes = [ctypes.POINTER(SHELLEXECUTEINFOW)]
+    shell32.ShellExecuteExW.restype = wintypes.BOOL
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel32.TerminateProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    params = subprocess.list2cmdline(args)
+    info = SHELLEXECUTEINFOW()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = SEE_MASK_NOCLOSEPROCESS
+    info.lpVerb = "runas"
+    info.lpFile = executable
+    info.lpParameters = params
+    info.lpDirectory = str(Path(executable).parent) if Path(executable).is_absolute() else None
+    info.nShow = SW_HIDE
+
+    if not shell32.ShellExecuteExW(ctypes.byref(info)):
+        error = ctypes.get_last_error()
+        if error == ERROR_CANCELLED:
+            return 1223, "Windows administrator approval was cancelled"
+        return error or 1, ctypes.FormatError(error) if error else "Could not start elevated helper"
+
+    process = info.hProcess
+    started = time.time()
+    try:
+        while True:
+            wait = kernel32.WaitForSingleObject(process, 100)
+            if wait == WAIT_OBJECT_0:
+                break
+            if wait != WAIT_TIMEOUT:
+                return 1, f"WaitForSingleObject failed: {wait}"
+            if job.cancel.is_set():
+                kernel32.TerminateProcess(process, 1)
+                raise Cancelled()
+            if time.time() - started > timeout:
+                kernel32.TerminateProcess(process, 1)
+                raise TimeoutError(f"Elevated helper timed out after {timeout:g}s")
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(process, ctypes.byref(exit_code)):
+            error = ctypes.get_last_error()
+            return error or 1, ctypes.FormatError(error) if error else "Could not read elevated helper exit code"
+        return int(exit_code.value), ""
+    finally:
+        kernel32.CloseHandle(process)
+
+
 def sharing_toggle(job: Job, engine: JobEngine) -> dict[str, Any]:
     if sys.platform != "win32":
         return unavailable("Internet sharing toggle is Windows-only", platform=sys.platform)
@@ -507,20 +599,22 @@ def sharing_toggle(job: Job, engine: JobEngine) -> dict[str, Any]:
     engine.progress(job, 5, "Preparing network transition")
     script_path, result_path = _write_sharing_script(enable, public_name, private_name)
     try:
-        # Run an elevated child PowerShell. This may show the normal Windows UAC prompt.
-        launch = (
-            "$p=Start-Process -FilePath 'powershell.exe' -Verb RunAs -PassThru -Wait "
-            f"-ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',{json.dumps(str(script_path))}); "
-            "exit $p.ExitCode"
-        )
+        # Elevate the helper directly through ShellExecuteEx with SW_HIDE.
+        # Windows can still show its UAC consent UI, but no PowerShell console
+        # window is created or flashed when the user clicks Sending/Disconnected.
         engine.progress(job, 15, "Waiting for Windows approval")
-        rc, out, err = run_process(job, [ps, "-NoProfile", "-Command", launch], timeout=180)
+        rc, launch_error = _run_elevated_hidden(
+            job,
+            ps,
+            ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+            timeout=180,
+        )
         engine.progress(job, 80, "Verifying sharing state")
         result: dict[str, Any]
         if result_path.exists():
             result = json.loads(result_path.read_text(encoding="utf-8-sig"))
         else:
-            result = unavailable(err or out or f"Sharing helper exited {rc}")
+            result = unavailable(launch_error or f"Sharing helper exited {rc}")
         status = sharing_status()
         result["status"] = status
         if status.get("connection"):
@@ -1052,6 +1146,85 @@ def adb_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "method": "pm-uninstall-user-0" if rc2 == 0 else "failed",
         "direct_error": "" if rc == 0 else (err or out),
     }
+
+
+def adb_app_export_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    package = str(job.params.get("package") or "").strip()
+    destination_raw = str(job.params.get("destination") or "").strip()
+    serial = str(job.params.get("serial") or "")
+    if not package:
+        return unavailable("Choose an installed Android app first")
+    if not destination_raw:
+        return unavailable("Choose a PC destination for the app")
+    if not re.fullmatch(r"[A-Za-z0-9._]+", package):
+        return unavailable("Android package name is invalid", package=package)
+
+    engine.progress(job, 10, f"Reading APK paths for {package}")
+    rc, out, err = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "pm", "path", package],
+        timeout=30,
+    )
+    if rc != 0:
+        return unavailable(err or out or "Could not read APK path", package=package)
+
+    remote_paths: list[str] = []
+    for line in out.splitlines():
+        value = line.strip()
+        if value.startswith("package:"):
+            remote = value[len("package:"):].strip()
+            if remote and remote not in remote_paths:
+                remote_paths.append(remote)
+    if not remote_paths:
+        return unavailable("Android returned no APK path for this package", package=package)
+
+    destination = Path(destination_raw).expanduser()
+    destination.mkdir(parents=True, exist_ok=True)
+    exported: list[str] = []
+
+    if len(remote_paths) == 1:
+        target = destination / f"{package}.apk"
+        engine.progress(job, 35, f"Getting {package}")
+        rc, out, err = run_process(
+            job,
+            _adb_prefix(serial) + ["pull", remote_paths[0], str(target)],
+            timeout=300,
+        )
+        if rc != 0:
+            return unavailable(err or out or "Could not export APK", package=package)
+        exported.append(str(target))
+    else:
+        package_dir = destination / package
+        package_dir.mkdir(parents=True, exist_ok=True)
+        for index, remote in enumerate(remote_paths, start=1):
+            name = posixpath.basename(remote) or f"split-{index}.apk"
+            target = package_dir / name
+            engine.progress(
+                job,
+                20 + (index - 1) / max(1, len(remote_paths)) * 75,
+                f"Getting {name}",
+            )
+            rc, out, err = run_process(
+                job,
+                _adb_prefix(serial) + ["pull", remote, str(target)],
+                timeout=300,
+            )
+            if rc != 0:
+                return unavailable(
+                    err or out or f"Could not export {name}",
+                    package=package,
+                    exported=exported,
+                )
+            exported.append(str(target))
+
+    return ok(
+        f"Got {package} to PC",
+        package=package,
+        files=exported,
+        count=len(exported),
+        destination=str(destination),
+        split=len(remote_paths) > 1,
+    )
 
 
 def adb_disable_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -2590,6 +2763,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.media.delete": adb_media_delete_job,
     "adb.install": adb_install_job,
     "adb.uninstall": adb_uninstall_job,
+    "adb.app.export": adb_app_export_job,
     "adb.disable": adb_disable_job,
     "files.copy": files_copy_job,
     "peer.files.send": peer_files_send_job,
@@ -2633,6 +2807,7 @@ def snapshot() -> dict[str, Any]:
             "adb": bool(adb),
             "adb_wifi": bool(adb),
             "adb_wifi_pair": bool(adb),
+            "adb_app_export": bool(adb),
             "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),
             "ios_bridge": _pmd_available(),

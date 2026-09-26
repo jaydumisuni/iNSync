@@ -274,5 +274,46 @@ class EngineProtocolTests(unittest.TestCase):
         self.assertEqual(err, "")
 
 
+    def test_adb_app_export_executes_package_path_and_pull_contract(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_export_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        calls = []
+        original_run = module.run_process
+        original_prefix = module._adb_prefix
+        try:
+            module._adb_prefix = lambda serial="": ["adb", "-s", serial]
+            def fake_run(job, cmd, **kwargs):
+                calls.append(cmd)
+                if cmd[-4:] == ["shell", "pm", "path", "com.example.demo"]:
+                    return 0, "package:/data/app/com.example.demo/base.apk", ""
+                if "pull" in cmd:
+                    return 0, "1 file pulled", ""
+                raise AssertionError(cmd)
+            module.run_process = fake_run
+            with tempfile.TemporaryDirectory(prefix="insync-app-export-") as td:
+                result = module.adb_app_export_job(
+                    module.Job(
+                        "adb.app.export",
+                        {
+                            "serial": "SERIAL",
+                            "package": "com.example.demo",
+                            "destination": td,
+                        },
+                    ),
+                    type("Engine", (), {"progress": lambda self, job, pct, msg: None})(),
+                )
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["count"], 1)
+            self.assertEqual(len(calls), 2)
+            self.assertIn("pull", calls[1])
+        finally:
+            module.run_process = original_run
+            module._adb_prefix = original_prefix
+
+
 if __name__ == "__main__":
     unittest.main()
