@@ -10,9 +10,9 @@ iNSync uses one transport core with capability-gated adapters for:
 - PC peer discovery, approval, provider/receiver roles and selective sharing
 - Streamed iNSync peer file send, remote shared-root browse and receive
 - Local, mapped-drive and UNC file transfer
-- Approved-peer text/image clipboard sync
+- Approved-peer text/image clipboard sync, including automatic copy-here/paste-there mode, including automatic copy-here/paste-there mode
 - Android phone content through ADB: Photos, Videos and Apps
-- A separate APK installer surface for APK/APKS/XAPK/split sets
+- A separate APK surface for APK/APKS/XAPK/split installs, installed-app listing/delete and Get-to-PC export
 - IPA validation/install as its own Apple package surface
 - iPhone Photos, Music export, installed apps and app Documents
 - Console package/file surfaces behind qualified console-specific adapters
@@ -30,7 +30,7 @@ The supplied ghost/glass artwork is the active visual authority.
 - IPA is separate from iPhone.
 - iPhone exposes Photos, Music, Apps and App Documents with List/Large views.
 - Popups use the compact glass maximize/close controls and dedicated trimmed transparent icons.
-- The minimized widget keeps the three original glass states: red disconnected, blue receiving, green sending. Its dropdown adds mode selection without replacing those states.
+- The minimized widget keeps the three original glass states: red disconnected, blue receiving, green sending. It physically docks to a screen edge with an 11-pixel reveal handle, remembers edge/Y/display across restart, and auto-starts collapsed after Windows login.
 - Console surfaces use the same interaction language but remain capability-gated until their specific adapters are qualified.
 
 ## Engine boundary
@@ -60,19 +60,24 @@ Application source and product behavior live in this repository. THETECHGUY Soft
 ## Current proof baseline
 
 - Branch: feature/standalone-functional-blend
-- Product source baseline: 3ba5b95 (Add APK app management and Wi-Fi ADB).
+- Product source baseline: 517bd4c (Finish APK export media previews widget and clipboard sync).
 - Patrol: PASS on ATHENA and KRATOS.
-- Product tests: 26/26 PASS on ATHENA and 26/26 PASS on KRATOS.
+- Product tests: 33/33 PASS on ATHENA and 33/33 PASS on KRATOS.
 - Renderer/backend syntax and compile gates: PASS.
-- Android physical proof: real connected-device photo listing and real image preview data returned through ADB.
-- APK app-manager physical proof on itel A6611L: 270 installed packages listed (17 user + 253 system) in 0.54 seconds after correcting the subprocess output deadlock.
-- Wi-Fi ADB physical proof on itel A6611L: USB serial -> tcpip 5555 -> 192.168.23.53:5555; iNSync read Android 15 device info and all 270 packages through the wireless serial, then returned adbd to USB mode successfully.
+- Android physical proof: real connected-device photo listing and real image preview data returned through ADB; Screenshot_20260925-181003.png returned 807,918 characters of preview data. Large view no longer renders a PHOTO label and hydrates visible image tiles with real preview bytes.
+- APK app-manager physical proof on itel A6611L: 270 installed packages listed (17 user + 253 system) in 0.50 seconds after correcting the subprocess output deadlock.
+- APK Get-to-PC physical proof: com.thetechguy.ttgservicemode exported as a 102,877-byte APK with SHA-256 3d171aa13da0b6a00a120e295b37dfe9bab1a995d442c145bb6afc851c5dcd79; proof output was removed afterward.
+- Wi-Fi ADB physical proof on itel A6611L: the current device reports adb_enabled=1, service.adb.tcp.port=5555 and a live wireless serial 192.168.23.53:5555 alongside USB; adb.wifi.connect returns already connected.
 - Android 11+ pairing support follows the existing THETECHGUY Device Manager evidence: the phone owns the Wireless debugging/pairing-code UI, while iNSync accepts the displayed IP:port + pairing code and routes it through the backend pairing operation. A live pair is only claimed when a phone-generated pairing endpoint/code is supplied.
 - PC peer discovery physically proved between ATHENA 172.20.10.3 and KRATOS 172.20.10.2.
 - ATHENA -> KRATOS streamed file proof: 2,500,000 bytes, matching SHA-256 a8c012d9cf1f86d0c02756344953d4aca88b025b9466bac453c11eae60f3dc3c.
 - KRATOS -> ATHENA remote-root browse + streamed receive proof: 2,300,000 bytes, matching SHA-256 efb16b3ca462f3860775e8b312728234e07dec727c29ebf755a3523975b4b261.
 - Temporary proof listeners/files were removed afterward. Normal peer state was restored to ATHENA provider / KRATOS receiver, Internet-only, with mutual approval retained.
 - ATHENA Wi-Fi -> Ethernet ICS remained Running at 192.168.250.1/24 throughout the peer proof.
+- Sharing elevation uses direct ShellExecuteExW + SW_HIDE; Windows may still show UAC consent when required, but iNSync no longer launches a visible intermediate PowerShell console when Sending/Disconnected is clicked.
+- Clipboard automatic mode is main-process owned: selected peer IDs, text/image types, direction and ON/OFF state persist in AppData; received peer clipboard data is written directly into the Windows clipboard so normal Paste works on the other machine.
+- Sharing elevation uses direct ShellExecuteExW + SW_HIDE; Windows may still show UAC consent when required, but iNSync no longer launches a visible intermediate PowerShell console when Sending/Disconnected is clicked.
+- Clipboard automatic mode is main-process owned: selected peer IDs, text/image types, direction and ON/OFF state persist in AppData; received peer clipboard data is written directly into the Windows clipboard so normal Paste works on the other machine.
 - Previous live Apple proof detected iPhone14,4 on iOS 18.5 through the bundled bridge.
 - Builder's installer taskbar-icon correction is published on fix/installer-taskbar-window-icon-20260925.
 
