@@ -487,5 +487,45 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertNotIn('id="peerText"', widget)
 
 
+    def test_android_app_rows_are_non_overlapping_and_readable(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            ".android-content .app-list{align-content:start;grid-auto-rows:max-content",
+            ".android-content .app-row{min-height:58px",
+            "background:rgba(7,14,30,.86)",
+            ".android-content .app-identity>div:last-child{min-width:0}",
+        ):
+            self.assertIn(token, renderer)
+
+    def test_widget_peer_empty_state_scroll_and_double_click_restore(self):
+        widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        for token in (
+            ".clipboard{display:grid",
+            "overflow-y:auto",
+            "scrollbar-width:none",
+            ".peer-empty{min-height:30px",
+            "data-peer-remove",
+            'card.addEventListener("dblclick"',
+            "window.ttg.showMain()",
+        ):
+            self.assertIn(token, widget)
+
+    def test_system_tray_uses_insync_icon_and_restores_main_window(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        for token in (
+            "nativeImage,Tray,Menu",
+            "let tray=null",
+            "function revealMainWindow(w)",
+            "w.setSkipTaskbar(false)",
+            "function createTray()",
+            '"insync-logo-transparent.png"',
+            'tray.setToolTip("iNSync")',
+            'tray.on("double-click",()=>showMain())',
+            '{label:"Open iNSync",click:()=>showMain()}',
+            "createTray();",
+        ):
+            self.assertIn(token, main)
+
+
 if __name__ == "__main__":
     unittest.main()

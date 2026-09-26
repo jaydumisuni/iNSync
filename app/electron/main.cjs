@@ -1,4 +1,4 @@
-const {app,BrowserWindow,ipcMain,screen,dialog,clipboard,nativeImage}=require("electron");
+const {app,BrowserWindow,ipcMain,screen,dialog,clipboard,nativeImage,Tray,Menu}=require("electron");
 const path=require("node:path");
 const fs=require("node:fs");
 const crypto=require("node:crypto");
@@ -22,6 +22,7 @@ const DEFAULT_STATE={
 let mainWindow=null;
 let widgetWindow=null;
 let bridge=null;
+let tray=null;
 let state={...DEFAULT_STATE,clipboardTypes:{...DEFAULT_STATE.clipboardTypes}};
 let widgetDock={edge:"right",y:null,displayId:null};
 let widgetExpanded=false;
@@ -301,13 +302,40 @@ function createMain(){
   return mainWindow;
 }
 
+function revealMainWindow(w){
+  if(!w||w.isDestroyed())return;
+  if(w.isMinimized())w.restore();
+  w.setSkipTaskbar(false);
+  w.show();
+  try{w.moveTop()}catch{}
+  w.focus();
+  if(widgetWindow&&!widgetWindow.isDestroyed())widgetWindow.hide();
+  broadcastState();
+}
+
 function showMain(){
   const w=createMain();
-  if(widgetWindow&&!widgetWindow.isDestroyed())widgetWindow.hide();
-  if(w.isMinimized())w.restore();
-  w.show();
-  w.focus();
-  broadcastState();
+  if(w.webContents.isLoadingMainFrame()){
+    w.once("ready-to-show",()=>revealMainWindow(w));
+    return;
+  }
+  revealMainWindow(w);
+}
+
+function createTray(){
+  if(tray&&!tray.isDestroyed())return tray;
+  const source=nativeImage.createFromPath(path.join(__dirname,"renderer","assets","insync-logo-transparent.png"));
+  const icon=source.isEmpty()?nativeImage.createEmpty():source.resize({width:20,height:20,quality:"best"});
+  tray=new Tray(icon);
+  tray.setToolTip("iNSync");
+  tray.on("double-click",()=>showMain());
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {label:"Open iNSync",click:()=>showMain()},
+    {label:"Show widget",click:()=>showWidget(true)},
+    {type:"separator"},
+    {label:"Exit",click:()=>app.quit()}
+  ]));
+  return tray;
 }
 
 function safeFilters(options={}){
@@ -329,6 +357,7 @@ if(!gotLock){
   app.whenReady().then(()=>{
     loadRuntimeState();
     configureClipboardMonitor({seed:true});
+    createTray();
     if(process.platform==="win32"&&app.isPackaged){
       try{app.setLoginItemSettings({openAtLogin:true,path:process.execPath,args:["--insync-startup"]})}catch{}
     }
@@ -395,5 +424,5 @@ if(!gotLock){
   });
   app.on("window-all-closed",()=>{});
   app.on("activate",()=>showMain());
-  app.on("before-quit",()=>{if(clipboardTimer)clearInterval(clipboardTimer);bridge?.stop()});
+  app.on("before-quit",()=>{if(clipboardTimer)clearInterval(clipboardTimer);bridge?.stop();if(tray&&!tray.isDestroyed())tray.destroy()});
 }
