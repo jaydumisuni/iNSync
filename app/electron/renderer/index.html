@@ -39,7 +39,7 @@ button,select,input{font:inherit}
 
 .lumi-combobox-host{position:relative;display:block;margin-top:9px}.lumi-combo-trigger{width:100%;min-height:36px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 10px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.82);color:#dce7f5;text-align:left;cursor:pointer}.lumi-combo-trigger strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-chevron{width:9px;height:9px;border-right:2px solid #b6c8de;border-bottom:2px solid #b6c8de;transform:rotate(45deg) translateY(-2px);transition:.14s}.lumi-combobox-host.open .lumi-chevron{transform:rotate(225deg) translate(-1px,-1px)}.lumi-combobox-list{position:absolute;z-index:225;left:0;right:0;top:calc(100% + 5px);max-height:255px;overflow:auto;padding:5px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.99);box-shadow:0 18px 50px rgba(0,0,0,.5);scrollbar-width:none}.lumi-combobox-list::-webkit-scrollbar{display:none}.lumi-combobox-list[hidden]{display:none}.lumi-combo-search{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:7px;margin:1px 1px 5px;padding:6px 8px;border:1px solid rgba(87,165,255,.35);border-radius:8px;background:#08101d}.lumi-combo-search span{font-size:0;color:#88a9c8}.search-mark{width:9px;height:9px;border:1.5px solid #88a9c8;border-radius:50%;position:relative;display:block}.search-mark:after{content:"";position:absolute;width:5px;height:1.5px;background:#88a9c8;right:-4px;bottom:-2px;transform:rotate(45deg);border-radius:2px}.lumi-combo-search input{width:100%;border:0!important;background:transparent!important;padding:0!important;color:#eaf4ff!important;outline:0!important;font-size:9px}.lumi-combobox-option{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;border:0;border-radius:8px;padding:8px 9px;background:transparent;color:#dce7f5;text-align:left;cursor:pointer}.lumi-combobox-option strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-combobox-option small{color:#7788a0;font-size:8px}.lumi-combobox-option:hover,.lumi-combobox-option.active{background:linear-gradient(90deg,rgba(87,165,255,.18),rgba(124,109,255,.12));color:#fff}
 .device-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.72fr);gap:7px;margin-bottom:9px}.android-content{min-height:0;display:flex;flex-direction:column}.android-content .media-list,.android-content .app-list{flex:1;max-height:none;min-height:0}.media-thumb{width:42px;height:42px;object-fit:cover;border-radius:10px;border:1px solid rgba(84,188,255,.13);background:rgba(12,25,42,.9);display:block}.media-list.large .media-row{position:relative;overflow:hidden}.media-list.large .media-row:before{display:none}.media-list.large .media-thumb{width:100%;height:108px;border-radius:10px}.media-list.large .media-copy{min-width:0}.media-placeholder{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(82,183,255,.14);background:linear-gradient(135deg,rgba(30,210,255,.14),rgba(87,95,255,.1));font-size:17px;color:#b8dcff}.media-list.large .media-placeholder{width:100%;height:108px;font-size:28px}.media-row-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}.media-list.large .media-row-main{grid-template-columns:1fr;align-items:start}.media-list.large .media-actions{margin-top:3px}.sectiontabs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
-</style>
+.remote-list{max-height:260px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}.remote-list::-webkit-scrollbar{display:none;width:0}.sectiontabs.two{grid-template-columns:repeat(2,minmax(0,1fr))}</style>
 </head>
 <body>
 <div id="stage">
@@ -88,7 +88,7 @@ const artByState={disconnected:"assets/insync-ui-disconnected.png",receiving:"as
 const data={
   sharing:{status:null},
   pc:{peers:[],role:"idle",scope:"internet-only",sharedPaths:[],sources:[],destination:""},
-  files:{sources:[],destination:""},
+  files:{sources:[],destination:"",peers:[],targets:[],mode:"send",remotePeer:"",remoteRoots:[],remoteRoot:"",remotePath:"",remoteEntries:[]},
   clipboard:{peers:[],targets:[],types:{text:true,image:true,files:false},direction:"two-way"},
   android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{}},
   apk:{paths:[]},
@@ -133,12 +133,24 @@ const modules={
     }
   },
   files:{
-    title:"File Share",sub:"Explorer-style send / receive popup for PCs and supported destinations.",icon:"files",
+    title:"File Share",sub:"Send to approved iNSync peers or browse and receive from their shared locations.",icon:"files",
     render(){
-      const q=queueJobFor("files");
+      const d=data.files,q=queueJobFor("files"),targets=new Set(d.targets);
+      const peers=d.peers.filter(x=>!x.self&&x.approved!==false);
+      const tabs='<div class="sectiontabs two"><button class="sectiontab '+(d.mode==="send"?"active":"")+'" data-cmd="filesMode" data-mode="send">Send</button><button class="sectiontab '+(d.mode==="receive"?"active":"")+'" data-cmd="filesMode" data-mode="receive">Receive</button></div>';
+      let primary="";
+      if(d.mode==="send"){
+        const peerChecks=peers.length?peers.map(x=>'<label class="check"><input type="checkbox" data-file-peer-id="'+esc(x.id)+'" '+(targets.has(x.id)?"checked":"")+'>'+esc(x.name||x.host||x.id)+' <small>'+esc(x.ip||"")+'</small></label>').join(""):'<div class="empty-state">No approved peers. Approve the other PC in PC Share first.</div>';
+        primary='<div class="card">'+tabs+'<div class="mini-explorer"><div class="pane"><h4>PC source</h4>'+selectedPaths(d.sources,"Choose files or a folder")+'</div><div class="pane"><h4>Peer targets</h4><div class="checklist">'+peerChecks+'</div></div></div><div class="share-path">'+esc(d.destination||"Optional local / mapped / UNC destination")+'</div><div class="buttonbar"><button class="secondary" data-cmd="filesChoose">Choose files</button><button class="secondary" data-cmd="filesChooseFolder">Choose folder</button><button class="secondary" data-cmd="filesDestination">Local destination</button><button class="primary" data-cmd="filesTransfer">Send selected</button><button class="secondary" data-cmd="filesPeerRefresh">Refresh peers</button></div></div>';
+      }else{
+        const peerOptions=peers.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===d.remotePeer?"selected":"")+'>'+esc(x.name||x.host||x.id)+' | '+esc(x.ip||"")+'</option>').join("");
+        const rootOptions=d.remoteRoots.map(x=>'<option value="'+esc(x.id)+'" '+(String(x.id)===String(d.remoteRoot)?"selected":"")+'>'+esc(x.name||x.path||x.id)+'</option>').join("");
+        const entries=d.remoteEntries.length?d.remoteEntries.map(item=>'<div class="row"><div><b>'+esc(item.name)+'</b><small>'+esc(item.type)+(item.type==="file"?" | "+fmtBytes(item.size||0):"")+'</small></div><button class="secondary mini" data-cmd="'+(item.type==="folder"?"filesRemoteOpen":"filesRemoteSave")+'" data-path="'+esc(item.path)+'">'+(item.type==="folder"?"Open":"Save")+'</button></div>').join(""):'<div class="empty-state">Choose an approved peer and shared root.</div>';
+        primary='<div class="card">'+tabs+'<div class="grid2"><div class="control"><label>Remote PC</label><select id="fileRemotePeer"><option value="">Choose peer</option>'+peerOptions+'</select></div><div class="control"><label>Shared root</label><select id="fileRemoteRoot"><option value="">Choose root</option>'+rootOptions+'</select></div></div><div class="share-path">'+esc(d.remotePath||"/")+'</div><div class="remote-list rows">'+entries+'</div><div class="share-path">'+esc(d.destination||"Choose a local receive folder")+'</div><div class="buttonbar"><button class="secondary" data-cmd="filesRemoteUp">Up</button><button class="secondary" data-cmd="filesDestination">Receive folder</button><button class="secondary" data-cmd="filesPeerRefresh">Refresh peers</button></div></div>';
+      }
       return [
-        '<div class="card"><h3>File explorer</h3><div class="mini-explorer"><div class="pane"><h4>PC source</h4>'+selectedPaths(data.files.sources,"Choose files or a folder")+'</div><div class="pane"><h4>Destination</h4><div class="file">'+esc(data.files.destination||"Choose destination folder")+'</div></div></div><div class="buttonbar"><button class="secondary" data-cmd="filesChoose">Choose files</button><button class="secondary" data-cmd="filesChooseFolder">Choose folder</button><button class="secondary" data-cmd="filesDestination">Destination</button><button class="primary" data-cmd="filesTransfer">Send selected</button></div></div>',
-        '<div class="card"><h3>Transfer queue</h3>'+(q?jobCard(q):'<div class="empty-state">No transfer queued.</div>')+'<div class="rows" style="margin-top:10px">'+row("Storage guard","Destination must be selected before transfer","On","green")+row("Transport","Local / mapped drive / UNC path","Ready","green")+'</div></div>'
+        primary,
+        '<div class="card"><h3>Transfer queue</h3>'+(q?jobCard(q):'<div class="empty-state">No transfer queued.</div>')+'<div class="rows" style="margin-top:10px">'+row("Peer transport","Streamed outside the renderer",engineSnapshot?.capabilities?.peer_files?"Ready":"Unavailable",engineSnapshot?.capabilities?.peer_files?"green":"red")+row("Remote browse","Only explicitly shared roots are exposed",engineSnapshot?.capabilities?.peer_file_browse?"Ready":"Unavailable",engineSnapshot?.capabilities?.peer_file_browse?"green":"red")+row("Local copy","Local / mapped drive / UNC remains available","Ready","green")+'</div></div>'
       ];
     }
   },
@@ -310,7 +322,7 @@ function openModule(key){
   if(key==="home")refreshEngine();
   if(key==="sharing")submit("sharing.status",{},"sharing",true);
   if(key==="android"||key==="apk")submit("adb.devices",{},key,true);
-  if(key==="pc"||key==="clipboard")submit("peer.list",{},key,true);
+  if(key==="pc"||key==="clipboard"||key==="files")submit("peer.list",{},key,true);
   if(key==="iphone"){submit("ios.status",{},"iphone",true);submit("ios.apps",{},"iphone",true);submit("ios.media.list",{kind:"photos"},"iphone",true)}
   if(key==="ipa")submit("ios.status",{},"ipa",true);
   if(["playstation","xbox","switch"].includes(key))submit("console.status",{console:key},key,true);
@@ -340,9 +352,11 @@ function handleFinished(job){
   updateRemembered(job);const meta=jobs.get(job.id)||{},r=job.result||{};if(job.id===activeJob)setJob(job);
   if(job.status==="completed")toast(r.message||job.message||"Completed");else if(job.status==="cancelled")toast("Cancelled");else toast(r.message||job.error||job.message||"Failed");
   if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){data.sharing.status=r.status||r;const x=r.status||r;if(x.connection)apply({connection:x.connection})}
-  if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[]}
+  if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[];data.files.peers=r.peers||[]}
   if(job.operation==="peer.approve")submit("peer.list",{},currentModule,true);
   if(job.operation==="peer.configure"&&r.peer){data.pc.role=r.peer.role||data.pc.role;data.pc.scope=r.peer.scope||data.pc.scope;data.pc.sharedPaths=r.peer.shared_paths||data.pc.sharedPaths;const c=roleColor(data.pc.role);apply({connection:c});window.ttg.stateSet({connection:c});submit("peer.list",{},null,true)}
+  if(job.operation==="peer.files.roots"){data.files.remoteRoots=r.roots||[];if(data.files.remoteRoots.length&&!data.files.remoteRoot){data.files.remoteRoot=String(data.files.remoteRoots[0].id);data.files.remotePath="";submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:""},"files",true)}}
+  if(job.operation==="peer.files.list"){data.files.remoteRoot=String(r.root_id??data.files.remoteRoot);data.files.remotePath=r.path||"";data.files.remoteEntries=r.entries||[]}
   if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial){submit("adb.info",{serial:data.android.serial},"android",true);if(currentModule==="android"){if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true)}}}
   if(job.operation==="adb.info")data.android.info=r;
   if(job.operation==="adb.apps")data.android.apps=r.apps||[];
@@ -368,11 +382,13 @@ window.ttg.onBackendEvent(evt=>{
   if((evt.type==="job.progress"||evt.type==="job.queued")&&job){updateRemembered(job);if(job.id===activeJob)setJob(job);if($("#backdrop").classList.contains("open"))renderModule()}
   if(evt.type==="job.finished"&&job)handleFinished(job);
   if(evt.type==="sharing.state"&&evt.connection)apply({connection:evt.connection});
-  if(evt.type==="peer.clipboard")toast("Clipboard received from "+(evt.sender_name||evt.sender_ip||"peer"));
+  if(evt.type==="peer.clipboard")toast("Clipboard received from "+(evt.sender_name||evt.sender_ip||"peer"));if(evt.type==="peer.file.received")toast("File received from "+(evt.sender_name||evt.sender_ip||"peer"));
 });
 
 function wireControls(){
   const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)};
+  const filePeer=$("#fileRemotePeer");if(filePeer)filePeer.onchange=e=>{data.files.remotePeer=e.target.value;data.files.remoteRoots=[];data.files.remoteRoot="";data.files.remotePath="";data.files.remoteEntries=[];if(data.files.remotePeer)submit("peer.files.roots",{peer_id:data.files.remotePeer},"files",true);renderModule()};
+  const fileRoot=$("#fileRemoteRoot");if(fileRoot)fileRoot.onchange=e=>{data.files.remoteRoot=e.target.value;data.files.remotePath="";data.files.remoteEntries=[];if(data.files.remotePeer&&data.files.remoteRoot!=="")submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:""},"files",true);renderModule()};
   $$("[data-lumi-combo]").forEach(host=>{
     const trigger=host.querySelector(".lumi-combo-trigger"),list=host.querySelector(".lumi-combobox-list"),search=host.querySelector(".lumi-combo-search input");
     trigger.onclick=e=>{e.stopPropagation();const opening=list.hidden;$$(".lumi-combobox-list").forEach(x=>x.hidden=true);$$(".lumi-combobox-host").forEach(x=>x.classList.remove("open"));list.hidden=!opening;host.classList.toggle("open",opening);if(opening)setTimeout(()=>search?.focus(),0)};
@@ -395,6 +411,7 @@ function schedulePreviewHydration(){
   }
 }
 document.addEventListener("click",e=>{if(!e.target.closest(".lumi-combobox-host")){$$(".lumi-combobox-list").forEach(x=>x.hidden=true);$$(".lumi-combobox-host").forEach(x=>x.classList.remove("open"))}});
+function syncFileTargets(){data.files.targets=$$("[data-file-peer-id]:checked").map(x=>x.dataset.filePeerId)}
 function syncClipboardControls(){
   data.clipboard.types.text=!!$("#clipTypeText")?.checked;data.clipboard.types.image=!!$("#clipTypeImage")?.checked;data.clipboard.types.files=!!$("#clipTypeFiles")?.checked;
   data.clipboard.direction=$("#clipDirection")?.value||"two-way";data.clipboard.targets=$$("[data-peer-id]:checked").map(x=>x.dataset.peerId);
@@ -412,10 +429,15 @@ async function command(cmd,b){
     if(data.pc.scope==="whole-pc"&&!confirm("Whole PC sharing is explicit. Continue with this scope?"))return;
     submit("peer.configure",{role:data.pc.role,scope:data.pc.scope,shared_paths:data.pc.sharedPaths},"pc");return;
   }
+  if(cmd==="filesMode"){data.files.mode=b.dataset.mode==="receive"?"receive":"send";renderModule();if(data.files.mode==="receive"&&!data.files.peers.length)submit("peer.list",{},"files",true);return}
+  if(cmd==="filesPeerRefresh"){submit("peer.list",{},"files",true);return}
   if(cmd==="filesChoose"){const r=await window.ttg.dialog.openFiles({title:"Choose files",multi:true});if(!r.canceled){data.files.sources=r.paths;renderModule()}return}
   if(cmd==="filesChooseFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose source folder"});if(!r.canceled){data.files.sources=[r.path];renderModule()}return}
-  if(cmd==="filesDestination"){const r=await window.ttg.dialog.openFolder({title:"Choose transfer destination"});if(!r.canceled){data.files.destination=r.path;renderModule()}return}
-  if(cmd==="filesTransfer"){submit("files.copy",{sources:data.files.sources,destination:data.files.destination},"files");return}
+  if(cmd==="filesDestination"){const r=await window.ttg.dialog.openFolder({title:data.files.mode==="receive"?"Choose receive folder":"Choose local transfer destination"});if(!r.canceled){data.files.destination=r.path;renderModule()}return}
+  if(cmd==="filesTransfer"){syncFileTargets();if(data.files.targets.length){submit("peer.files.send",{sources:data.files.sources,targets:data.files.targets},"files");return}if(data.files.destination){submit("files.copy",{sources:data.files.sources,destination:data.files.destination},"files");return}toast("Choose an approved peer or local destination");return}
+  if(cmd==="filesRemoteOpen"){data.files.remotePath=b.dataset.path||"";submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:data.files.remotePath},"files",true);return}
+  if(cmd==="filesRemoteUp"){const parts=(data.files.remotePath||"").split("/").filter(Boolean);parts.pop();data.files.remotePath=parts.join("/");if(data.files.remotePeer&&data.files.remoteRoot!=="")submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:data.files.remotePath},"files",true);return}
+  if(cmd==="filesRemoteSave"){if(!data.files.destination){const r=await window.ttg.dialog.openFolder({title:"Choose receive folder"});if(r.canceled)return;data.files.destination=r.path}submit("peer.files.pull",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:b.dataset.path||"",destination:data.files.destination},"files");return}
   if(cmd==="clipboardToggle"){state.clipboardEnabled=!state.clipboardEnabled;await window.ttg.stateSet({clipboardEnabled:state.clipboardEnabled});renderModule();return}
   if(cmd==="clipboardApply"){syncClipboardControls();await window.ttg.stateSet({mode:"clipboard",clipboardEnabled:state.clipboardEnabled});toast("Clipboard selection applied");renderModule();return}
   if(cmd==="clipText"){syncClipboardControls();const c=await window.ttg.clipboard.readText();submit("clipboard.text",{text:c.text,targets:data.clipboard.targets,direction:data.clipboard.direction},"clipboard");return}

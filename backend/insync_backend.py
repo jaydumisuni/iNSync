@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -18,7 +19,7 @@ import threading
 import time
 import uuid
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 STDOUT_LOCK = threading.Lock()
@@ -1124,6 +1125,129 @@ def _recv_exact(sock: socket.socket, length: int) -> bytes:
     return b"".join(chunks)
 
 
+
+PEER_FILE_CHUNK = 1024 * 1024
+
+
+def _safe_peer_relative(value: str) -> Path:
+    raw = str(value or "").replace("\\", "/")
+    pure = PurePosixPath(raw)
+    if pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts):
+        raise ValueError("Invalid peer relative path")
+    return Path(*pure.parts)
+
+
+def _peer_receive_root(config: dict[str, Any]) -> Path:
+    configured = [Path(str(value)).expanduser() for value in config.get("shared_paths", []) if value]
+    root = configured[0] if configured else (_local_state_dir() / "received")
+    root.mkdir(parents=True, exist_ok=True)
+    return root.resolve()
+
+
+def _peer_shared_roots(config: dict[str, Any]) -> list[Path]:
+    scope = str(config.get("scope") or "internet-only")
+    if scope == "internet-only":
+        return []
+    configured = [Path(str(value)).expanduser() for value in config.get("shared_paths", []) if value]
+    roots: list[Path] = []
+    for value in configured:
+        try:
+            resolved = value.resolve()
+        except OSError:
+            continue
+        if resolved.exists() and resolved not in roots:
+            roots.append(resolved)
+    if scope == "whole-pc":
+        if os.name == "nt":
+            for code in range(ord("C"), ord("Z") + 1):
+                drive = Path(f"{chr(code)}:\\")
+                if drive.exists():
+                    try:
+                        resolved = drive.resolve()
+                    except OSError:
+                        continue
+                    if resolved not in roots:
+                        roots.append(resolved)
+        else:
+            root = Path("/").resolve()
+            if root not in roots:
+                roots.append(root)
+    return roots
+
+
+def _peer_resolve_shared(config: dict[str, Any], root_id: str, relative: str = "") -> tuple[Path, Path]:
+    roots = _peer_shared_roots(config)
+    try:
+        index = int(str(root_id))
+    except (TypeError, ValueError):
+        raise ValueError("Invalid shared root")
+    if index < 0 or index >= len(roots):
+        raise ValueError("Shared root is unavailable")
+    root = roots[index].resolve()
+    if not relative:
+        return root, root
+    rel = _safe_peer_relative(relative)
+    target = (root / rel).resolve()
+    if target != root and root not in target.parents:
+        raise ValueError("Requested path is outside the shared root")
+    return root, target
+
+
+def _peer_root_records(config: dict[str, Any]) -> list[dict[str, Any]]:
+    records = []
+    for index, root in enumerate(_peer_shared_roots(config)):
+        label = root.name or root.anchor or str(root)
+        records.append({"id": str(index), "name": label, "path": str(root)})
+    return records
+
+
+def _peer_directory_records(config: dict[str, Any], root_id: str, relative: str) -> dict[str, Any]:
+    root, target = _peer_resolve_shared(config, root_id, relative)
+    if not target.is_dir():
+        raise NotADirectoryError(str(target))
+    entries: list[dict[str, Any]] = []
+    try:
+        children = sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.casefold()))
+    except PermissionError as exc:
+        raise PermissionError(f"Cannot list {target}: {exc}") from exc
+    for child in children[:500]:
+        try:
+            is_dir = child.is_dir()
+            size = 0 if is_dir else child.stat().st_size
+        except OSError:
+            continue
+        rel = child.relative_to(root).as_posix()
+        entries.append({
+            "name": child.name,
+            "path": rel,
+            "type": "folder" if is_dir else "file",
+            "size": size,
+        })
+    current = "" if target == root else target.relative_to(root).as_posix()
+    return {"root_id": str(root_id), "path": current, "entries": entries}
+
+
+def _collect_peer_file_plan(sources: list[Path]) -> tuple[list[tuple[Path, str, int]], int]:
+    plan: list[tuple[Path, str, int]] = []
+    total = 0
+    for source in sources:
+        if not source.exists():
+            raise FileNotFoundError(str(source))
+        if source.is_file():
+            size = source.stat().st_size
+            plan.append((source, source.name, size))
+            total += size
+            continue
+        for child in source.rglob("*"):
+            if not child.is_file():
+                continue
+            rel = (Path(source.name) / child.relative_to(source)).as_posix()
+            size = child.stat().st_size
+            plan.append((child, rel, size))
+            total += size
+    return plan, total
+
+
 def _peer_send_json(sock: socket.socket, value: dict[str, Any]) -> None:
     payload = json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     if len(payload) > PEER_MAX_MESSAGE:
@@ -1221,6 +1345,105 @@ class PeerTransport:
                 )
                 _peer_send_json(client, {"ok": True, "message": "Image clipboard received"})
                 return
+            if action == "files.push":
+                size = int(message.get("size") or -1)
+                if size < 0:
+                    _peer_send_json(client, {"ok": False, "message": "Invalid file size"})
+                    return
+                relative = _safe_peer_relative(str(message.get("relative_path") or message.get("name") or ""))
+                receive_root = _peer_receive_root(config)
+                target = (receive_root / relative).resolve()
+                if target != receive_root and receive_root not in target.parents:
+                    _peer_send_json(client, {"ok": False, "message": "Invalid receive path"})
+                    return
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temp = target.with_name(target.name + f".insync-part-{uuid.uuid4().hex[:8]}")
+                _peer_send_json(client, {"ok": True, "ready": True, "destination": str(target)})
+                client.settimeout(600)
+                digest = hashlib.sha256()
+                received = 0
+                try:
+                    with temp.open("wb") as handle:
+                        remaining = size
+                        while remaining:
+                            chunk = client.recv(min(PEER_FILE_CHUNK, remaining))
+                            if not chunk:
+                                raise ConnectionError("peer disconnected during file transfer")
+                            handle.write(chunk)
+                            digest.update(chunk)
+                            received += len(chunk)
+                            remaining -= len(chunk)
+                    os.replace(temp, target)
+                finally:
+                    if temp.exists():
+                        try:
+                            temp.unlink()
+                        except OSError:
+                            pass
+                emit(
+                    "peer.file.received",
+                    sender_id=sender_id,
+                    sender_name=sender_name,
+                    sender_ip=address[0],
+                    path=str(target),
+                    bytes=received,
+                )
+                _peer_send_json(
+                    client,
+                    {
+                        "ok": True,
+                        "message": "File received",
+                        "path": str(target),
+                        "bytes": received,
+                        "sha256": digest.hexdigest(),
+                    },
+                )
+                return
+            if action == "files.roots":
+                _peer_send_json(client, {"ok": True, "roots": _peer_root_records(config)})
+                return
+            if action == "files.list":
+                listing = _peer_directory_records(
+                    config,
+                    str(message.get("root_id") or ""),
+                    str(message.get("path") or ""),
+                )
+                _peer_send_json(client, {"ok": True, **listing})
+                return
+            if action == "files.pull":
+                root, target = _peer_resolve_shared(
+                    config,
+                    str(message.get("root_id") or ""),
+                    str(message.get("path") or ""),
+                )
+                if not target.is_file():
+                    _peer_send_json(client, {"ok": False, "message": "Requested item is not a file"})
+                    return
+                size = target.stat().st_size
+                _peer_send_json(
+                    client,
+                    {
+                        "ok": True,
+                        "ready": True,
+                        "name": target.name,
+                        "size": size,
+                        "path": target.relative_to(root).as_posix(),
+                    },
+                )
+                client.settimeout(600)
+                digest = hashlib.sha256()
+                with target.open("rb") as handle:
+                    while True:
+                        chunk = handle.read(PEER_FILE_CHUNK)
+                        if not chunk:
+                            break
+                        client.sendall(chunk)
+                        digest.update(chunk)
+                _peer_send_json(
+                    client,
+                    {"ok": True, "message": "File sent", "bytes": size, "sha256": digest.hexdigest()},
+                )
+                return
             _peer_send_json(client, {"ok": False, "message": "Unsupported peer action"})
         except Exception as exc:
             try:
@@ -1254,6 +1477,134 @@ class PeerTransport:
             return unavailable(f"Peer transport failed: {exc}", peer_id=peer.get("id"), ip=ip)
         return result
 
+    def send_file(
+        self,
+        peer: dict[str, Any],
+        source: Path,
+        relative_path: str,
+        *,
+        progress: Callable[[int], None] | None = None,
+        cancel: threading.Event | None = None,
+    ) -> dict[str, Any]:
+        config = _load_peer_config()
+        ip = str(peer.get("ip") or "")
+        if not ip:
+            return unavailable("Peer has no reachable IP", peer_id=peer.get("id"))
+        size = source.stat().st_size
+        port = int(peer.get("transfer_port") or PEER_DATA_PORT)
+        header = {
+            "action": "files.push",
+            "sender_id": config["peer_id"],
+            "sender_name": socket.gethostname(),
+            "name": source.name,
+            "relative_path": PurePosixPath(relative_path).as_posix(),
+            "size": size,
+        }
+        try:
+            with socket.create_connection((ip, port), timeout=5) as sock:
+                sock.settimeout(600)
+                _peer_send_json(sock, header)
+                ready = _peer_recv_json(sock)
+                if not ready.get("ok") or not ready.get("ready"):
+                    return ready
+                sent = 0
+                digest = hashlib.sha256()
+                with source.open("rb") as handle:
+                    while True:
+                        if cancel and cancel.is_set():
+                            raise Cancelled()
+                        chunk = handle.read(PEER_FILE_CHUNK)
+                        if not chunk:
+                            break
+                        sock.sendall(chunk)
+                        digest.update(chunk)
+                        sent += len(chunk)
+                        if progress:
+                            progress(len(chunk))
+                result = _peer_recv_json(sock)
+                result["local_sha256"] = digest.hexdigest()
+                result["sent_bytes"] = sent
+                return result
+        except Cancelled:
+            raise
+        except OSError as exc:
+            return unavailable(f"Peer file transport failed: {exc}", peer_id=peer.get("id"), ip=ip)
+
+    def pull_file(
+        self,
+        peer: dict[str, Any],
+        root_id: str,
+        remote_path: str,
+        destination: Path,
+        *,
+        progress: Callable[[int, int], None] | None = None,
+        cancel: threading.Event | None = None,
+    ) -> dict[str, Any]:
+        config = _load_peer_config()
+        ip = str(peer.get("ip") or "")
+        if not ip:
+            return unavailable("Peer has no reachable IP", peer_id=peer.get("id"))
+        port = int(peer.get("transfer_port") or PEER_DATA_PORT)
+        request = {
+            "action": "files.pull",
+            "sender_id": config["peer_id"],
+            "sender_name": socket.gethostname(),
+            "root_id": str(root_id),
+            "path": str(remote_path or ""),
+        }
+        try:
+            with socket.create_connection((ip, port), timeout=5) as sock:
+                sock.settimeout(600)
+                _peer_send_json(sock, request)
+                meta = _peer_recv_json(sock)
+                if not meta.get("ok") or not meta.get("ready"):
+                    return meta
+                size = int(meta.get("size") or 0)
+                name = Path(str(meta.get("name") or "received.bin")).name
+                destination.mkdir(parents=True, exist_ok=True)
+                target = destination / name
+                temp = target.with_name(target.name + f".insync-part-{uuid.uuid4().hex[:8]}")
+                digest = hashlib.sha256()
+                received = 0
+                try:
+                    with temp.open("wb") as handle:
+                        remaining = size
+                        while remaining:
+                            if cancel and cancel.is_set():
+                                raise Cancelled()
+                            chunk = sock.recv(min(PEER_FILE_CHUNK, remaining))
+                            if not chunk:
+                                raise ConnectionError("peer disconnected during receive")
+                            handle.write(chunk)
+                            digest.update(chunk)
+                            received += len(chunk)
+                            remaining -= len(chunk)
+                            if progress:
+                                progress(received, size)
+                    final = _peer_recv_json(sock)
+                    if not final.get("ok"):
+                        return final
+                    os.replace(temp, target)
+                finally:
+                    if temp.exists():
+                        try:
+                            temp.unlink()
+                        except OSError:
+                            pass
+                return {
+                    "ok": True,
+                    "available": True,
+                    "message": "File received",
+                    "path": str(target),
+                    "bytes": received,
+                    "sha256": digest.hexdigest(),
+                    "remote_sha256": final.get("sha256", ""),
+                }
+        except Cancelled:
+            raise
+        except (OSError, ConnectionError) as exc:
+            return unavailable(f"Peer receive failed: {exc}", peer_id=peer.get("id"), ip=ip)
+
 
 PEER_TRANSPORT = PeerTransport()
 
@@ -1271,6 +1622,128 @@ def _approved_targets(target_ids: list[str]) -> tuple[list[dict[str, Any]], list
     found = {str(peer.get("id")) for peer in selected}
     missing = sorted(wanted - found)
     return selected, missing
+
+
+
+def peer_files_send_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    sources = [Path(str(value)) for value in (job.params.get("sources") or []) if value]
+    targets = [str(value) for value in (job.params.get("targets") or []) if value]
+    if not sources:
+        return unavailable("Choose one or more files/folders")
+    if not targets:
+        return unavailable("Choose at least one approved iNSync peer")
+    peers, missing = _approved_targets(targets)
+    if not peers:
+        return unavailable("No approved peers are reachable", missing=missing)
+    engine.progress(job, 2, "Scanning files")
+    plan, bytes_per_peer = _collect_peer_file_plan(sources)
+    total_bytes = max(1, bytes_per_peer * len(peers))
+    transferred = 0
+    results: list[dict[str, Any]] = []
+    for peer in peers:
+        for source, relative, size in plan:
+            if job.cancel.is_set():
+                raise Cancelled()
+            peer_name = peer.get("name") or peer.get("ip") or peer.get("id")
+            engine.progress(job, (transferred / total_bytes) * 100.0, f"Sending {source.name} to {peer_name}")
+            def on_chunk(delta: int) -> None:
+                nonlocal transferred
+                transferred += delta
+                engine.progress(
+                    job,
+                    min(99.0, (transferred / total_bytes) * 100.0),
+                    f"Sending {source.name} to {peer_name}",
+                )
+            result = PEER_TRANSPORT.send_file(
+                peer,
+                source,
+                relative,
+                progress=on_chunk,
+                cancel=job.cancel,
+            )
+            results.append({
+                "peer_id": peer.get("id"),
+                "peer": peer_name,
+                "source": str(source),
+                "relative_path": relative,
+                **result,
+            })
+            if not result.get("ok"):
+                return {
+                    "ok": False,
+                    "available": True,
+                    "message": result.get("message") or "Peer file transfer failed",
+                    "results": results,
+                    "missing": missing,
+                }
+    return ok(
+        f"Sent {len(plan)} file(s) to {len(peers)} peer(s)",
+        files=len(plan),
+        peers=len(peers),
+        bytes=transferred,
+        results=results,
+        missing=missing,
+    )
+
+
+def _approved_peer(peer_id: str) -> tuple[dict[str, Any] | None, list[str]]:
+    peers, missing = _approved_targets([peer_id])
+    return (peers[0] if peers else None), missing
+
+
+def peer_files_roots_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    peer_id = str(job.params.get("peer_id") or "")
+    if not peer_id:
+        return unavailable("Choose an approved iNSync peer")
+    peer, missing = _approved_peer(peer_id)
+    if not peer:
+        return unavailable("Peer is not reachable or approved", missing=missing)
+    engine.progress(job, 20, "Reading shared roots")
+    result = PEER_TRANSPORT.send(peer, "files.roots", {})
+    return {**result, "peer_id": peer_id}
+
+
+def peer_files_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    peer_id = str(job.params.get("peer_id") or "")
+    root_id = str(job.params.get("root_id") or "")
+    path = str(job.params.get("path") or "")
+    if not peer_id or root_id == "":
+        return unavailable("Choose a peer and shared root")
+    peer, missing = _approved_peer(peer_id)
+    if not peer:
+        return unavailable("Peer is not reachable or approved", missing=missing)
+    engine.progress(job, 20, "Reading remote folder")
+    result = PEER_TRANSPORT.send(peer, "files.list", {"root_id": root_id, "path": path})
+    return {**result, "peer_id": peer_id}
+
+
+def peer_files_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    peer_id = str(job.params.get("peer_id") or "")
+    root_id = str(job.params.get("root_id") or "")
+    path = str(job.params.get("path") or "")
+    destination_raw = str(job.params.get("destination") or "").strip()
+    if not peer_id or root_id == "" or not path or not destination_raw:
+        return unavailable("Choose a peer file and local destination")
+    peer, missing = _approved_peer(peer_id)
+    if not peer:
+        return unavailable("Peer is not reachable or approved", missing=missing)
+    destination = Path(destination_raw)
+    engine.progress(job, 10, "Receiving peer file")
+    def on_progress(received: int, total: int) -> None:
+        engine.progress(
+            job,
+            10.0 + (received / max(1, total)) * 88.0,
+            f"Receiving {Path(path).name}",
+        )
+    result = PEER_TRANSPORT.pull_file(
+        peer,
+        root_id,
+        path,
+        destination,
+        progress=on_progress,
+        cancel=job.cancel,
+    )
+    return {**result, "peer_id": peer_id}
 
 
 def peers_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -1909,6 +2382,10 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.uninstall": adb_uninstall_job,
     "adb.disable": adb_disable_job,
     "files.copy": files_copy_job,
+    "peer.files.send": peer_files_send_job,
+    "peer.files.roots": peer_files_roots_job,
+    "peer.files.list": peer_files_list_job,
+    "peer.files.pull": peer_files_pull_job,
     "peer.list": peers_list_job,
     "peer.configure": peer_configure_job,
     "peer.approve": peer_approve_job,
@@ -1941,6 +2418,8 @@ def snapshot() -> dict[str, Any]:
         capabilities={
             "network_sharing": sys.platform == "win32",
             "file_copy": True,
+            "peer_files": True,
+            "peer_file_browse": True,
             "adb": bool(adb),
             "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),

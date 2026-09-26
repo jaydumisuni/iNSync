@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import plistlib
 import zipfile
@@ -215,6 +216,32 @@ class EngineProtocolTests(unittest.TestCase):
                     if stream is not None:
                         stream.close()
 
+
+
+    def test_peer_file_helpers_preserve_relative_paths_and_block_traversal(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with self.assertRaises(ValueError):
+            module._safe_peer_relative("../escape.txt")
+        with self.assertRaises(ValueError):
+            module._safe_peer_relative("/absolute.txt")
+
+        with tempfile.TemporaryDirectory(prefix="insync-peer-plan-") as td:
+            root = Path(td)
+            folder = root / "bundle"
+            folder.mkdir()
+            (folder / "a.txt").write_text("a", encoding="utf-8")
+            nested = folder / "nested"
+            nested.mkdir()
+            (nested / "b.txt").write_text("bb", encoding="utf-8")
+            plan, total = module._collect_peer_file_plan([folder])
+            relative = sorted(item[1] for item in plan)
+            self.assertEqual(relative, ["bundle/a.txt", "bundle/nested/b.txt"])
+            self.assertEqual(total, 3)
 
 
 if __name__ == "__main__":

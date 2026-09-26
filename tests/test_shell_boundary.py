@@ -233,5 +233,35 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertNotIn('<select id="mode">', widget)
 
 
+    def test_peer_file_transport_and_remote_browser_are_engine_owned(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            '"peer.files.send"',
+            '"peer.files.roots"',
+            '"peer.files.list"',
+            '"peer.files.pull"',
+            "def send_file(",
+            "def pull_file(",
+            "peer.file.received",
+            '"peer_files": True',
+            '"peer_file_browse": True',
+        ):
+            self.assertIn(token, backend)
+        for token in (
+            'data-cmd="filesMode"',
+            'data-mode="send"',
+            'data-mode="receive"',
+            'data-file-peer-id=',
+            'filesRemoteOpen',
+            'filesRemoteSave',
+            'submit("peer.files.send"',
+            'submit("peer.files.pull"',
+        ):
+            self.assertIn(token, renderer)
+        self.assertIn("Only explicitly shared roots are exposed", renderer)
+        self.assertIn("scrollbar-width:none", renderer)
+
+
 if __name__ == "__main__":
     unittest.main()
