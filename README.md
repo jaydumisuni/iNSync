@@ -60,7 +60,7 @@ Application source and product behavior live in this repository. THETECHGUY Soft
 ## Current proof baseline
 
 - Branch: feature/standalone-functional-blend
-- Product source baseline: 3ba5b95 (Add streamed peer file sharing and remote browse).
+- Product source baseline: 3ba5b95 (Add APK app management and Wi-Fi ADB).
 - Patrol: PASS on ATHENA and KRATOS.
 - Product tests: 26/26 PASS on ATHENA and 26/26 PASS on KRATOS.
 - Renderer/backend syntax and compile gates: PASS.
