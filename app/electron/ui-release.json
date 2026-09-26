@@ -6,7 +6,7 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "b22c6e04afefda1ff9405a38359ff12644941c8e6cfb98901d8b9f1524ac61cf",
+    "sha256": "ecdc1a75282326c0bbafc8e064f7ba745bb6791920f21ef5e53213fb6da3a36a",
     "widget": "renderer/widget.html",
     "widgetSha256": "23410c1a4670ba189c2a3317bfcc39f8aef7c11cb653c6f5aff3cb599c52cac7"
   },
@@ -15,7 +15,7 @@
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "f63dcf8244e591e73c20f7b32dd430564b9992f7c57513e11054768196d99146",
+    "sha256": "b99e86bb0e3b77a0cbc257b3f52b070117186a1d2264558b90dcfb5362c23d00",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
@@ -29,7 +29,9 @@
       "iosDocuments": true,
       "androidMedia": true,
       "androidMediaPreview": true,
-      "iosMediaPreview": true
+      "iosMediaPreview": true,
+      "peerFiles": true,
+      "peerFileBrowse": true
     }
   },
   "handoff": {

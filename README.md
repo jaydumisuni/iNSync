@@ -7,60 +7,64 @@ THETECHGUY DIGITAL SOLUTIONS local transport and device bridge.
 iNSync uses one transport core with capability-gated adapters for:
 
 - Internet sharing / normal-mode rollback
-- PC peer discovery, roles and selective sharing
+- PC peer discovery, approval, provider/receiver roles and selective sharing
+- Streamed iNSync peer file send, remote shared-root browse and receive
 - Local, mapped-drive and UNC file transfer
 - Approved-peer text/image clipboard sync
-- Android ADB package install and app management
+- Android phone content through ADB: Photos, Videos and Apps
+- A separate APK installer surface for APK/APKS/XAPK/split sets
 - IPA validation/install as its own Apple package surface
 - iPhone Photos, Music export, installed apps and app Documents
 - Console package/file surfaces behind qualified console-specific adapters
 
-The full application and the minimized clipboard/connection widget share one main-process state contract. Transport work never runs in the Electron renderer.
+The full application and minimized connection/clipboard widget share one main-process state contract. Transport work never runs in the Electron renderer.
 
 ## UI contract
 
-The supplied standalone/glass popup language is the active UI authority.
+The supplied ghost/glass artwork is the active visual authority.
 
-- Android has one Android surface. APK/APKS/XAPK/split-package work lives inside Android; there is no duplicate APK tile in the popup.
-- IPA is its own popup for choosing, validating and installing `.ipa`.
-- iPhone is separate from IPA and exposes Photos, Music, Apps and App Documents.
-- Photos: list, save to PC, delete.
-- Music: list and save to PC. Raw delete is intentionally blocked until a library-safe Apple media adapter is qualified.
-- Apps: list installed user apps and delete.
-- App Documents: list, send a PC file into Documents, save to PC, delete.
-- Console popups keep the same iNSync glass language; package install remains capability-gated until the matching console backend is qualified.
-
-The original ghost glasses are recolored in place: red = disconnected, blue = receiving, green = sending. No second glasses overlay is rendered.
+- APK is a dedicated install tile.
+- Android is a separate content surface with Photos, Videos and Apps.
+- Android uses List/Large views, hidden scrollbars and real photo previews when the device can provide them.
+- Android device/tool selection uses the Lumi-style searchable combobox.
+- IPA is separate from iPhone.
+- iPhone exposes Photos, Music, Apps and App Documents with List/Large views.
+- Popups use the compact glass maximize/close controls and dedicated trimmed transparent icons.
+- The minimized widget keeps the three original glass states: red disconnected, blue receiving, green sending. Its dropdown adds mode selection without replacing those states.
+- Console surfaces use the same interaction language but remain capability-gated until their specific adapters are qualified.
 
 ## Engine boundary
 
 Renderer -> preload IPC -> Electron main -> JSONL sidecar -> queued worker jobs.
 
-Long-running operations return a job ID immediately. The sidecar streams progress/results and supports cancellation, preventing ADB installs, file transfers, Apple-device work and network changes from blocking the UI.
+Long-running operations return a job ID immediately. The sidecar streams progress/results and supports cancellation.
 
-The Apple-device bridge is bundled into the compiled sidecar by THETECHGUY Software Builder through the project-declared `requirements-insync-sidecar.txt`; customer PCs do not need a manual Python installation.
+Peer file transfer uses the approved-peer transport on TCP 49550. Files are streamed in chunks rather than embedded in the JSON envelope. Remote browsing exposes only configured shared roots unless whole-pc scope is explicitly selected. Relative paths are validated against traversal.
+
+The Apple-device bridge is bundled into the compiled sidecar by THETECHGUY Software Builder through requirements-insync-sidecar.txt; customer PCs do not need a manual Python installation.
 
 ## Build ownership
 
-Application source and product behavior live in this repository. THETECHGUY Software Builder owns Electron staging, Builder-owned Python sidecar dependencies, PyInstaller sidecar compilation, Electron packaging, ASAR/fuse hardening, native packaging, signing/release packaging and graphical installers. Patrol owns project-placement and ownership enforcement.
+Application source and product behavior live in this repository. THETECHGUY Software Builder owns Electron staging, Python sidecar dependencies, PyInstaller sidecar compilation, Electron packaging, ASAR/fuse hardening, native packaging and graphical installers. Patrol owns project-placement and ownership enforcement.
 
-## Current Windows proof
+## Current proof baseline
 
-- Patrol allows `D:\projects\iNSync`.
-- Product tests: 11/11 PASS.
-- Renderer/widget/main/preload/sidecar syntax and Python compile: PASS.
-- Builder flow: 12/12 complete.
-- Builder runtime smoke: PASS.
-- Graphical installer verification: PASS.
-- Installer ZIP verification: PASS.
-- Installer dry-run: PASS.
-- Installed `iNSync.exe` and `iNSync-backend.exe` hashes match the verified Builder payloads.
-- Installed compiled sidecar reports ADB, peer clipboard, iOS bridge, iOS apps, iOS media, iOS Documents, IPA install and Windows sharing capabilities.
-- Live connected iPhone proof: one iPhone detected through bundled `pymobiledevice3`; iOS 18.5, iPhone14,4 and device storage were read successfully.
-- ATHENA Wi-Fi -> Ethernet Internet sharing remained working while iNSync was rebuilt and installed.
+- Branch: feature/standalone-functional-blend
+- Product source baseline: e5fe414 (Add streamed peer file sharing and remote browse).
+- Patrol: PASS on ATHENA and KRATOS.
+- Product tests: 22/22 PASS on ATHENA and 22/22 PASS on KRATOS.
+- Renderer/backend syntax and compile gates: PASS.
+- Android physical proof: real connected-device photo listing and real image preview data returned through ADB.
+- PC peer discovery physically proved between ATHENA 172.20.10.3 and KRATOS 172.20.10.2.
+- ATHENA -> KRATOS streamed file proof: 2,500,000 bytes, matching SHA-256 a8c012d9cf1f86d0c02756344953d4aca88b025b9466bac453c11eae60f3dc3c.
+- KRATOS -> ATHENA remote-root browse + streamed receive proof: 2,300,000 bytes, matching SHA-256 efb16b3ca462f3860775e8b312728234e07dec727c29ebf755a3523975b4b261.
+- Temporary proof listeners/files were removed afterward. Normal peer state was restored to ATHENA provider / KRATOS receiver, Internet-only, with mutual approval retained.
+- ATHENA Wi-Fi -> Ethernet ICS remained Running at 192.168.250.1/24 throughout the peer proof.
+- Previous live Apple proof detected iPhone14,4 on iOS 18.5 through the bundled bridge.
+- Builder's installer taskbar-icon correction is published on fix/installer-taskbar-window-icon-20260925.
 
 ## Capability gates
 
-- Music deletion is intentionally blocked until the Apple music-library database can be updated safely.
-- Console package install remains gated per console/firmware until the PS/Xbox/Switch adapters are qualified.
-- Destructive operations require explicit user selection/confirmation.
+- iPhone Music deletion remains blocked until the Apple media-library database can be updated safely.
+- PlayStation/Xbox/Switch install backends remain adapter-pending per console/firmware; the UI does not claim unsupported physical capability.
+- Destructive device operations require explicit user selection/confirmation.
