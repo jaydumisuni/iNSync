@@ -81,6 +81,17 @@ Application source and product behavior live in this repository. THETECHGUY Soft
 - Previous live Apple proof detected iPhone14,4 on iOS 18.5 through the bundled bridge.
 - Builder's installer taskbar-icon correction is published on fix/installer-taskbar-window-icon-20260925.
 
+## Android ADB runtime
+
+- APK has Install / Apps / Wi-Fi ADB tabs.
+- Apps supports All / User / System filtering, search, Get, Delete and refresh.
+- The Android app-list backend no longer risks a Windows pipe deadlock on large pm-list-packages output; subprocess stdout/stderr spill to temporary files while cancellation/timeouts remain active.
+- Live itel proof returned 270 installed packages (17 user / 253 system) through the engine in about 0.5 seconds.
+- Wi-Fi ADB implements status, classic tcpip-5555 enable, connect, disconnect, USB mode, Android 11+ pairing-code support and mDNS discovery.
+- iNSync carries the owned ADB 1.0.41 / platform-tools 36.0.2 runtime recovered from THETECHGUY Device Manager/new eco system.
+- Existing ecosystem USB/classic ADB stays on port 5037. Modern iNSync Wireless Debugging uses the bundled 1.0.41 server on isolated port 5041, preventing version fights with tools such as TechGuy-IMEI.
+- Physical coexistence of 5037 and 5041 was proved. The current phone needs one RSA approval for the newly generated modern-server key before the final 5041 device-operation proof.
+
 ## Capability gates
 
 - iPhone Music deletion remains blocked until the Apple media-library database can be updated safely.

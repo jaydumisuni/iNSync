@@ -6,7 +6,7 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "36020006ceea47e48e1ffdc934914c4dcc096c827459dd24fab6bbf3b70a532b",
+    "sha256": "65a19927218ffac2ec21b0766f1089df72fc493eaa19856dfb20f4c9ce3e8bcc",
     "widget": "renderer/widget.html",
     "widgetSha256": "f1ee6e6a730cab115a22cd8a510016804eccb897ba4298add53eaa6a38b97d6a"
   },
@@ -15,7 +15,7 @@
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "c06ce8a0bf7f16bf012ec9ebf2222e341847bf591b802955f14d97daab4d3868",
+    "sha256": "e94d9bd55eae11aaffec3d956376fab7b5248a4e9752994f47989b4ca893143b",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
@@ -36,7 +36,12 @@
       "adbWifi": true,
       "adbWifiPair": true,
       "nonblockingProcessCapture": true,
-      "adbAppExport": true
+      "adbAppExport": true,
+      "apkApps": true,
+      "adbMdns": true,
+      "bundledAdb": "1.0.41 / 36.0.2",
+      "modernAdbServerPort": 5041,
+      "largeOutputDeadlockFix": true
     }
   },
   "handoff": {

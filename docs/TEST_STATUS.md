@@ -131,3 +131,18 @@ The graphical installer pipeline has already passed readiness, creation, package
 - PlayStation/Xbox/Switch package installation remains adapter-pending until those console-specific backends are qualified.
 - iPhone Music deletion remains gated for Apple library integrity.
 - Hardware-dependent operations are only marked physically proved where matching hardware was present for the test.
+
+
+## APK Apps / Wi-Fi ADB proof
+
+- Product UI has Install / Apps / Wi-Fi ADB tabs under APK.
+- Apps supports All / User / System filters, search, Get, Delete and Refresh Apps.
+- Direct package-manager timing on the attached itel was about 0.16-0.19 seconds for user/system/all package queries.
+- The iNSync engine returned 270 installed packages (17 user / 253 system) in about 0.5 seconds after fixing the generic Windows child-output pipe deadlock.
+- Wi-Fi status read wlan0 = 192.168.23.53, adb_enabled = 1, and service.adb.tcp.port = 5555.
+- Wi-Fi disconnect and reconnect to 192.168.23.53:5555 were physically proved while USB remained available.
+- iNSync now carries ADB 1.0.41 / platform-tools 36.0.2 plus AdbWinApi/AdbWinUsb/libwinpthread from the owned Device Manager ecosystem.
+- Modern Wireless Debugging supports adb pair, adb mdns services, connect/disconnect and classic 5555 enable.
+- To coexist with TechGuy-IMEI's active legacy ADB polling, classic/USB operations retain ecosystem port 5037 while modern Wireless Debugging runs on isolated ADB server port 5041.
+- Ports 5037 and 5041 were proved listening concurrently without killing each other.
+- Final isolated-server device operation is pending one phone-side RSA approval because a new host ADB key was generated during the version-transition proof.

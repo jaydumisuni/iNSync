@@ -315,5 +315,35 @@ class EngineProtocolTests(unittest.TestCase):
             module._adb_prefix = original_prefix
 
 
+    def test_mdns_parser_classifies_pairing_and_connect_services(self):
+        spec = importlib.util.spec_from_file_location("insync_backend_mdns_test", BACKEND)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        sample = (
+            "List of discovered mdns services\n"
+            "adb-ABC._adb-tls-pairing._tcp _adb-tls-pairing._tcp 192.168.1.20:37123\n"
+            "adb-ABC._adb-tls-connect._tcp _adb-tls-connect._tcp 192.168.1.20:40555\n"
+        )
+        original = module.run_process
+        original_modern = module.adb_modern_path
+        module.run_process = lambda job, cmd, timeout=20, **kwargs: (0, sample, "")
+        module.adb_modern_path = lambda: "mock-adb"
+        try:
+            class Engine:
+                def progress(self, job, value, message):
+                    pass
+            result = module.adb_wifi_mdns_job(module.Job("adb.wifi.mdns", {}), Engine())
+        finally:
+            module.run_process = original
+            module.adb_modern_path = original_modern
+        self.assertTrue(result["ok"])
+        self.assertEqual([item["kind"] for item in result["services"]], ["pairing", "connect"])
+        self.assertEqual(result["services"][0]["endpoint"], "192.168.1.20:37123")
+        self.assertEqual(result["services"][1]["endpoint"], "192.168.1.20:40555")
+
+
 if __name__ == "__main__":
     unittest.main()

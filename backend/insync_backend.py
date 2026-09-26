@@ -53,8 +53,44 @@ def powershell() -> str | None:
     return shutil.which("powershell.exe") or shutil.which("powershell")
 
 
+ADB_MODERN_SERVER_PORT = int(os.environ.get("INSYNC_ADB_MODERN_PORT", "5041"))
+
+
+def _bundled_adb_path() -> str | None:
+    candidates: list[Path] = []
+    source_root = Path(__file__).resolve().parents[1]
+    candidates.append(source_root / "resources" / "android-platform-tools" / ("adb.exe" if os.name == "nt" else "adb"))
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        candidates.append(exe.parent.parent / "resources" / "android-platform-tools" / ("adb.exe" if os.name == "nt" else "adb"))
+        candidates.append(exe.parent / "android-platform-tools" / ("adb.exe" if os.name == "nt" else "adb"))
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def adb_modern_path() -> str | None:
+    override = os.environ.get("INSYNC_MODERN_ADB_PATH", "").strip()
+    if override and Path(override).is_file():
+        return override
+    return _bundled_adb_path() or shutil.which("adb")
+
+
 def adb_path() -> str | None:
-    return shutil.which("adb")
+    override = os.environ.get("INSYNC_ADB_PATH", "").strip()
+    if override and Path(override).is_file():
+        return override
+    # Preserve the ecosystem's existing 5037 server for USB/classic ADB when
+    # one is installed. Modern Wireless Debugging is isolated on 5041.
+    return shutil.which("adb") or adb_modern_path()
+
+
+def _adb_modern_base() -> list[str]:
+    adb = adb_modern_path()
+    if not adb:
+        raise FileNotFoundError("Modern ADB runtime is unavailable")
+    return [adb, "-P", str(ADB_MODERN_SERVER_PORT)]
 
 
 def command_path(name: str) -> str | None:
@@ -637,26 +673,52 @@ def sharing_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     return result
 
 
+def _parse_adb_devices(text: str) -> list[dict[str, Any]]:
+    devices: list[dict[str, Any]] = []
+    for line in text.splitlines()[1:]:
+        if not line.strip():
+            continue
+        parts = line.split()
+        devices.append({
+            "serial": parts[0],
+            "state": parts[1] if len(parts) > 1 else "unknown",
+            "detail": " ".join(parts[2:]),
+        })
+    return devices
+
+
 def adb_devices_data(job: Job | None = None) -> dict[str, Any]:
     adb = adb_path()
     if not adb:
-        return unavailable("ADB is not installed or not on PATH", devices=[])
+        return unavailable("ADB runtime is unavailable", devices=[])
     if job:
         rc, out, err = run_process(job, [adb, "devices", "-l"], timeout=20)
     else:
         rc, out, err = run_quick([adb, "devices", "-l"], timeout=20)
-    devices = []
-    if rc == 0:
-        for line in out.splitlines()[1:]:
-            if not line.strip():
-                continue
-            parts = line.split()
-            devices.append({
-                "serial": parts[0],
-                "state": parts[1] if len(parts) > 1 else "unknown",
-                "detail": " ".join(parts[2:]),
-            })
-    return {"ok": rc == 0, "available": True, "devices": devices, "message": f"{len(devices)} ADB device(s)", "error": err if rc else ""}
+    devices = _parse_adb_devices(out) if rc == 0 else []
+
+    modern = adb_modern_path()
+    if modern:
+        cmd = _adb_modern_base() + ["devices", "-l"]
+        if job:
+            rc2, out2, _ = run_process(job, cmd, timeout=20)
+        else:
+            rc2, out2, _ = run_quick(cmd, timeout=20)
+        if rc2 == 0:
+            known = {row["serial"] for row in devices}
+            # The isolated modern server is authoritative for network transports.
+            # Do not duplicate its USB view because 5037 remains the ecosystem USB owner.
+            for row in _parse_adb_devices(out2):
+                if ":" in row["serial"] and row["serial"] not in known:
+                    devices.append(row)
+                    known.add(row["serial"])
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "devices": devices,
+        "message": f"{len(devices)} ADB device(s)",
+        "error": err if rc else "",
+    }
 
 
 def adb_devices_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -665,9 +727,11 @@ def adb_devices_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 
 def _adb_prefix(serial: str) -> list[str]:
+    if serial and ":" in serial:
+        return _adb_modern_base() + ["-s", serial]
     adb = adb_path()
     if not adb:
-        raise FileNotFoundError("ADB is not installed or not on PATH")
+        raise FileNotFoundError("ADB runtime is unavailable")
     return [adb] + (["-s", serial] if serial else [])
 
 
@@ -835,11 +899,10 @@ def adb_wifi_enable_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable(out or err or "Could not enable wireless ADB", serial=serial, wlan_ip=wlan_ip)
     endpoint = f"{wlan_ip}:5555"
     time.sleep(1.0)
-    adb = adb_path()
-    if not adb:
-        return unavailable("ADB is not installed or not on PATH", serial=serial, wlan_ip=wlan_ip)
+    if not adb_modern_path():
+        return unavailable("Modern ADB runtime is unavailable", serial=serial, wlan_ip=wlan_ip)
     engine.progress(job, 68, f"Connecting to {endpoint}")
-    rc2, out2, err2 = run_process(job, [adb, "connect", endpoint], timeout=25)
+    rc2, out2, err2 = run_process(job, _adb_modern_base() + ["connect", endpoint], timeout=25)
     message = out2 or err2 or out or "Wireless ADB command completed"
     success = rc2 == 0 and ("connected to" in message.lower() or "already connected" in message.lower())
     return {
@@ -857,11 +920,10 @@ def adb_wifi_connect_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     endpoint = _adb_endpoint(str(job.params.get("endpoint") or job.params.get("ip") or ""))
     if not endpoint:
         return unavailable("Enter the Android Wi-Fi ADB IP or IP:port")
-    adb = adb_path()
-    if not adb:
-        return unavailable("ADB is not installed or not on PATH")
+    if not adb_modern_path():
+        return unavailable("Modern ADB runtime is unavailable")
     engine.progress(job, 25, f"Connecting to {endpoint}")
-    rc, out, err = run_process(job, [adb, "connect", endpoint], timeout=25)
+    rc, out, err = run_process(job, _adb_modern_base() + ["connect", endpoint], timeout=25)
     message = out or err or "adb connect completed"
     return {
         "ok": rc == 0 and ("connected to" in message.lower() or "already connected" in message.lower()),
@@ -878,11 +940,10 @@ def adb_wifi_disconnect_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     endpoint = _adb_endpoint(raw or (serial if ":" in serial else ""))
     if not endpoint:
         return unavailable("Choose or enter a wireless ADB endpoint first")
-    adb = adb_path()
-    if not adb:
-        return unavailable("ADB is not installed or not on PATH")
+    if not adb_modern_path():
+        return unavailable("Modern ADB runtime is unavailable")
     engine.progress(job, 30, f"Disconnecting {endpoint}")
-    rc, out, err = run_process(job, [adb, "disconnect", endpoint], timeout=20)
+    rc, out, err = run_process(job, _adb_modern_base() + ["disconnect", endpoint], timeout=20)
     return {
         "ok": rc == 0,
         "available": True,
@@ -909,11 +970,10 @@ def adb_wifi_pair_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     code = str(job.params.get("code") or "").strip()
     if not endpoint or not code:
         return unavailable("Enter the Wireless debugging pairing IP:port and pairing code")
-    adb = adb_path()
-    if not adb:
-        return unavailable("ADB is not installed or not on PATH")
+    if not adb_modern_path():
+        return unavailable("Modern ADB runtime is unavailable")
     engine.progress(job, 30, f"Pairing with {endpoint}")
-    rc, out, err = run_process(job, [adb, "pair", endpoint, code], timeout=30)
+    rc, out, err = run_process(job, _adb_modern_base() + ["pair", endpoint, code], timeout=30)
     message = out or err or "adb pair completed"
     return {
         "ok": rc == 0 and "successfully paired" in message.lower(),
@@ -921,6 +981,39 @@ def adb_wifi_pair_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "message": message,
         "endpoint": endpoint,
     }
+
+
+def adb_wifi_mdns_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    adb = adb_modern_path()
+    if not adb:
+        return unavailable("Modern ADB runtime is unavailable", services=[])
+    engine.progress(job, 30, "Discovering Android Wireless debugging services")
+    rc, out, err = run_process(job, _adb_modern_base() + ["mdns", "services"], timeout=20)
+    if rc != 0:
+        return unavailable(err or out or "ADB mDNS discovery is unavailable", services=[])
+    services: list[dict[str, str]] = []
+    for raw in out.splitlines():
+        line = raw.strip()
+        if not line or line.lower().startswith("list of discovered"):
+            continue
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        service = next((part for part in parts if part.startswith("_adb-tls-")), "")
+        endpoint = parts[-1] if ":" in parts[-1] else ""
+        if not service or not endpoint:
+            continue
+        services.append({
+            "name": parts[0],
+            "service": service,
+            "endpoint": endpoint,
+            "kind": "pairing" if "pairing" in service else "connect",
+        })
+    return ok(
+        f"{len(services)} Wireless debugging service(s)",
+        services=services,
+        adb=adb,
+    )
 
 
 
@@ -2757,6 +2850,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.wifi.disconnect": adb_wifi_disconnect_job,
     "adb.wifi.usb": adb_wifi_usb_job,
     "adb.wifi.pair": adb_wifi_pair_job,
+    "adb.wifi.mdns": adb_wifi_mdns_job,
     "adb.media.list": adb_media_list_job,
     "adb.media.preview": adb_media_preview_job,
     "adb.media.pull": adb_media_pull_job,
@@ -2795,6 +2889,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
 
 def snapshot() -> dict[str, Any]:
     adb = adb_path()
+    modern_adb = adb_modern_path()
     return ok(
         "iNSync engine ready",
         platform=sys.platform,
@@ -2805,8 +2900,8 @@ def snapshot() -> dict[str, Any]:
             "peer_files": True,
             "peer_file_browse": True,
             "adb": bool(adb),
-            "adb_wifi": bool(adb),
-            "adb_wifi_pair": bool(adb),
+            "adb_wifi": bool(adb) and bool(modern_adb),
+            "adb_wifi_pair": bool(modern_adb),
             "adb_app_export": bool(adb),
             "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),

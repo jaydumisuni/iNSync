@@ -372,8 +372,8 @@ class ShellBoundaryTests(unittest.TestCase):
             '"adb.wifi.disconnect"',
             '"adb.wifi.usb"',
             '"adb.wifi.pair"',
-            '"adb_wifi": bool(adb)',
-            '"adb_wifi_pair": bool(adb)',
+            '"adb_wifi": bool(adb) and bool(modern_adb)',
+            '"adb_wifi_pair": bool(modern_adb)',
         ):
             self.assertIn(token, backend)
 
@@ -382,10 +382,12 @@ class ShellBoundaryTests(unittest.TestCase):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         self.assertIn('["tcpip", "5555"]', backend)
         self.assertIn('["shell", "ip", "-f", "inet", "addr", "show", "wlan0"]', backend)
-        self.assertIn('[adb, "connect", endpoint]', backend)
-        self.assertIn('[adb, "pair", endpoint, code]', backend)
+        self.assertIn('_adb_modern_base() + ["connect", endpoint]', backend)
+        self.assertIn('_adb_modern_base() + ["pair", endpoint, code]', backend)
         self.assertIn("Android 11+ Pairing", renderer)
         self.assertIn("Pair device with pairing code", renderer)
+        self.assertIn('ADB_MODERN_SERVER_PORT = int(os.environ.get("INSYNC_ADB_MODERN_PORT", "5041"))', backend)
+        self.assertIn('return shutil.which("adb") or adb_modern_path()', backend)
 
 
     def test_renderer_refreshes_backend_capabilities_on_start_and_module_open(self):
@@ -393,6 +395,24 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('if(!engineSnapshot)refreshEngine()', renderer)
         self.assertIn('$("#backdrop").classList.contains("open")', renderer)
         self.assertIn('apply(state);await refreshEngine()', renderer)
+
+
+    def test_apk_wireless_debugging_has_mdns_discovery_and_owned_adb_runtime(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'data-cmd="wifiMdns"',
+            'wifiUseService',
+            'mDNS services',
+            '"adb.wifi.mdns"',
+            '_adb_modern_base() + ["mdns", "services"]',
+            'INSYNC_ADB_PATH',
+            '"android-platform-tools"',
+        ):
+            self.assertIn(token, renderer if token.startswith("data-cmd") or token in ("wifiUseService", "mDNS services") else backend)
+        runtime = ROOT / "resources" / "android-platform-tools"
+        for name in ("adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll"):
+            self.assertTrue((runtime / name).is_file(), name)
 
 
 if __name__ == "__main__":
