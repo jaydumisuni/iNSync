@@ -17,7 +17,7 @@ button,select,input{font:inherit}
 .hotspot::after{content:attr(data-label);position:absolute;left:50%;bottom:0;transform:translate(-50%,75%);opacity:0;pointer-events:none;white-space:nowrap;padding:5px 8px;border-radius:999px;background:rgba(10,18,34,.78);border:1px solid rgba(88,189,255,.18);backdrop-filter:blur(14px);color:#eaf8ff;font-size:10px;font-weight:700;transition:.14s}
 .hotspot:hover{filter:drop-shadow(0 0 11px #34d8ff)}
 .hotspot:hover::after{opacity:1;transform:translate(-50%,100%)}
-.hs-wifi{left:37%;top:0;width:25%;height:18%}.hs-ps{left:18%;top:5%;width:29%;height:27%}.hs-xbox{left:57%;top:4%;width:29%;height:26%}.hs-switch{left:71%;top:22%;width:29%;height:22%}.hs-iphone{left:2%;top:23%;width:23%;height:24%}.hs-ipa{left:0;top:39%;width:19%;height:19%}.hs-android{left:78%;top:39%;width:22%;height:20%}.hs-folder{left:79%;top:54%;width:21%;height:20%}.hs-clipboard{left:82%;top:70%;width:18%;height:20%}.hs-pc{left:0;top:71%;width:30%;height:20%}.hs-home{left:25%;top:31%;width:50%;height:62%;border-radius:46%;z-index:3}
+.hs-wifi{left:37%;top:0;width:25%;height:18%}.hs-ps{left:18%;top:5%;width:29%;height:27%}.hs-xbox{left:57%;top:4%;width:29%;height:26%}.hs-switch{left:71%;top:22%;width:29%;height:22%}.hs-iphone{left:2%;top:23%;width:23%;height:24%}.hs-ipa{left:0;top:39%;width:19%;height:19%}.hs-apk{left:0;top:54%;width:21%;height:18%}.hs-android{left:78%;top:39%;width:22%;height:20%}.hs-folder{left:79%;top:54%;width:21%;height:20%}.hs-clipboard{left:82%;top:70%;width:18%;height:20%}.hs-pc{left:0;top:71%;width:30%;height:20%}.hs-home{left:25%;top:31%;width:50%;height:62%;border-radius:46%;z-index:3}
 .window-btn{position:absolute;top:38.3%;z-index:12;width:36px;height:36px;border-radius:13px;border:1px solid rgba(104,184,255,.18);background:linear-gradient(180deg,rgba(16,26,48,.72),rgba(6,12,25,.58));backdrop-filter:blur(14px);color:#e9f8ff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,.32);font-size:20px}
 .window-btn:hover{transform:translateY(-1px);box-shadow:0 12px 30px rgba(0,0,0,.36),0 0 15px rgba(79,185,255,.18)}
 #minBtn{left:28.5%;padding-bottom:6px}#closeBtn{right:28.5%;color:#ffdbe4;border-color:rgba(255,92,124,.22);background:linear-gradient(180deg,rgba(56,14,29,.72),rgba(29,7,15,.58))}
@@ -25,8 +25,8 @@ button,select,input{font:inherit}
 
 .module-art,.mini-art{flex:0 0 auto;background-repeat:no-repeat;background-position:center;background-size:contain;background-color:transparent;border:0;box-shadow:none}
 .module-art{width:58px;height:58px}.mini-art{width:42px;height:42px}
-.icon-sharing{background-image:url("assets/icons/sharing.png")}.icon-playstation{background-image:url("assets/icons/playstation.png")}.icon-xbox{background-image:url("assets/icons/xbox.png")}.icon-switch{background-image:url("assets/icons/switch.png")}.icon-iphone{background-image:url("assets/icons/iphone.png")}.icon-ipa{background-image:url("assets/icons/ipa.png")}.icon-android{background-image:url("assets/icons/android.png")}.icon-files{background-image:url("assets/icons/files.png")}.icon-clipboard{background-image:url("assets/icons/clipboard.png")}.icon-pc{background-image:url("assets/icons/pc.png")}.icon-home{background-image:url("assets/icons/home.png")}
-.modal{grid-template-rows:auto minmax(0,1fr) auto}.modal-title .module-art{filter:drop-shadow(0 0 15px rgba(49,183,255,.3))}
+.icon-sharing{background-image:url("assets/icons/sharing.png")}.icon-playstation{background-image:url("assets/icons/playstation.png")}.icon-xbox{background-image:url("assets/icons/xbox.png")}.icon-switch{background-image:url("assets/icons/switch.png")}.icon-iphone{background-image:url("assets/icons/iphone.png")}.icon-ipa{background-image:url("assets/icons/ipa.png")}.icon-apk{background-image:url("assets/icons/apk.png")}.icon-android{background-image:url("assets/icons/android.png")}.icon-files{background-image:url("assets/icons/files.png")}.icon-clipboard{background-image:url("assets/icons/clipboard.png")}.icon-pc{background-image:url("assets/icons/pc.png")}.icon-home{background-image:url("assets/icons/home.png")}
+.modal{grid-template-rows:auto minmax(0,1fr) auto}.modal-title .module-art{filter:none}
 .jobdock{display:none;align-items:center;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:8px 10px;border-radius:14px;border:1px solid rgba(89,190,255,.12);background:rgba(8,16,30,.62)}.jobdock.show{display:grid}.jobmeta{min-width:0}.jobline{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;color:#d9edff}.jobline span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cancel{padding:6px 9px;border-radius:9px;border:1px solid rgba(255,93,123,.18);background:rgba(255,93,123,.08);color:#ffd7df;font-size:9px;cursor:pointer}
 .tag.blue{color:#c9efff;border-color:rgba(89,204,255,.25);background:rgba(89,204,255,.08)}.empty-state{padding:14px;border-radius:14px;border:1px dashed rgba(88,180,255,.14);background:rgba(0,0,0,.12);color:#9db4d2;font-size:11px;text-align:center}.share-path{margin-top:9px;padding:8px 10px;border-radius:12px;border:1px dashed rgba(88,180,255,.16);background:rgba(0,0,0,.16);color:#cfe4f7;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.muted-file{color:#7f9ab7}.queue-card{padding:11px;border-radius:15px;border:1px solid rgba(88,180,255,.1);background:rgba(255,255,255,.025)}.queue-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.queue-head b{font-size:12px}.queue-head small{display:block;color:#9db4d2;margin-top:3px;font-size:10px}.queue-pct{text-align:right;margin-top:5px;font-size:9px;color:#a9c9e8}.pager{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:8px;font-size:9px;color:#a9c9e8}.pager button{padding:5px 8px}
 
@@ -36,6 +36,9 @@ button,select,input{font:inherit}
 .view-list-icon,.view-large-icon{display:inline-block;width:14px;height:14px;position:relative}.view-list-icon:before{content:"";position:absolute;inset:2px 0;background:linear-gradient(#dcefff 0 2px,transparent 2px 5px,#dcefff 5px 7px,transparent 7px 10px,#dcefff 10px 12px)}.view-large-icon{border:1px solid rgba(220,239,255,.82);border-radius:2px}.view-large-icon:before,.view-large-icon:after{content:"";position:absolute;background:rgba(220,239,255,.82)}.view-large-icon:before{left:6px;top:0;bottom:0;width:1px}.view-large-icon:after{top:6px;left:0;right:0;height:1px}
 .app-list,.media-list{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}.app-list::-webkit-scrollbar,.media-list::-webkit-scrollbar{display:none;width:0;height:0}.app-list{max-height:315px;padding-right:2px}.modal.maximized .app-list{max-height:555px}.media-list{max-height:330px;padding-right:2px}.modal.maximized .media-list{max-height:590px}
 .media-list.large{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));align-content:start}.media-list.large .media-row{grid-template-columns:1fr;min-height:132px;align-content:space-between;text-align:left}.media-list.large .media-row:before{content:"";width:42px;height:42px;border-radius:11px;border:1px solid rgba(82,183,255,.14);background:rgba(33,97,148,.12);box-shadow:inset 0 0 18px rgba(41,151,255,.06)}.media-list.large .media-row[data-kind="photos"]:before{background:linear-gradient(135deg,rgba(30,210,255,.2),rgba(87,95,255,.16))}.media-list.large .media-row[data-kind="music"]:before{background:linear-gradient(135deg,rgba(149,86,255,.19),rgba(41,199,255,.13))}.media-list.large .media-row[data-kind="documents"]:before{background:linear-gradient(135deg,rgba(255,202,65,.14),rgba(41,199,255,.1))}.media-list.large .media-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+
+.lumi-combobox-host{position:relative;display:block;margin-top:9px}.lumi-combo-trigger{width:100%;min-height:36px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:8px 10px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.82);color:#dce7f5;text-align:left;cursor:pointer}.lumi-combo-trigger strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-chevron{width:9px;height:9px;border-right:2px solid #b6c8de;border-bottom:2px solid #b6c8de;transform:rotate(45deg) translateY(-2px);transition:.14s}.lumi-combobox-host.open .lumi-chevron{transform:rotate(225deg) translate(-1px,-1px)}.lumi-combobox-list{position:absolute;z-index:225;left:0;right:0;top:calc(100% + 5px);max-height:255px;overflow:auto;padding:5px;border:1px solid rgba(91,119,191,.35);border-radius:11px;background:rgba(8,13,21,.99);box-shadow:0 18px 50px rgba(0,0,0,.5);scrollbar-width:none}.lumi-combobox-list::-webkit-scrollbar{display:none}.lumi-combobox-list[hidden]{display:none}.lumi-combo-search{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:7px;margin:1px 1px 5px;padding:6px 8px;border:1px solid rgba(87,165,255,.35);border-radius:8px;background:#08101d}.lumi-combo-search span{font-size:0;color:#88a9c8}.search-mark{width:9px;height:9px;border:1.5px solid #88a9c8;border-radius:50%;position:relative;display:block}.search-mark:after{content:"";position:absolute;width:5px;height:1.5px;background:#88a9c8;right:-4px;bottom:-2px;transform:rotate(45deg);border-radius:2px}.lumi-combo-search input{width:100%;border:0!important;background:transparent!important;padding:0!important;color:#eaf4ff!important;outline:0!important;font-size:9px}.lumi-combobox-option{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;border:0;border-radius:8px;padding:8px 9px;background:transparent;color:#dce7f5;text-align:left;cursor:pointer}.lumi-combobox-option strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.lumi-combobox-option small{color:#7788a0;font-size:8px}.lumi-combobox-option:hover,.lumi-combobox-option.active{background:linear-gradient(90deg,rgba(87,165,255,.18),rgba(124,109,255,.12));color:#fff}
+.device-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.72fr);gap:7px;margin-bottom:9px}.android-content{min-height:0;display:flex;flex-direction:column}.android-content .media-list,.android-content .app-list{flex:1;max-height:none;min-height:0}.media-thumb{width:42px;height:42px;object-fit:cover;border-radius:10px;border:1px solid rgba(84,188,255,.13);background:rgba(12,25,42,.9);display:block}.media-list.large .media-row{position:relative;overflow:hidden}.media-list.large .media-row:before{display:none}.media-list.large .media-thumb{width:100%;height:108px;border-radius:10px}.media-list.large .media-copy{min-width:0}.media-placeholder{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(82,183,255,.14);background:linear-gradient(135deg,rgba(30,210,255,.14),rgba(87,95,255,.1));font-size:17px;color:#b8dcff}.media-list.large .media-placeholder{width:100%;height:108px;font-size:28px}.media-row-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}.media-list.large .media-row-main{grid-template-columns:1fr;align-items:start}.media-list.large .media-actions{margin-top:3px}.sectiontabs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 </style>
 </head>
 <body>
@@ -50,6 +53,7 @@ button,select,input{font:inherit}
   <button class="hotspot hs-switch" data-module="switch" data-label="Switch"></button>
   <button class="hotspot hs-iphone" data-module="iphone" data-label="iPhone"></button>
   <button class="hotspot hs-ipa" data-module="ipa" data-label="IPA"></button>
+  <button class="hotspot hs-apk" data-module="apk" data-label="APK"></button>
   <button class="hotspot hs-android" data-module="android" data-label="Android"></button>
   <button class="hotspot hs-folder" data-module="files" data-label="File Share"></button>
   <button class="hotspot hs-clipboard" data-module="clipboard" data-label="Clipboard"></button>
@@ -86,9 +90,10 @@ const data={
   pc:{peers:[],role:"idle",scope:"internet-only",sharedPaths:[],sources:[],destination:""},
   files:{sources:[],destination:""},
   clipboard:{peers:[],targets:[],types:{text:true,image:true,files:false},direction:"two-way"},
-  android:{devices:[],serial:"",packagePaths:[],apps:[],page:0,info:null},
+  android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{}},
+  apk:{paths:[]},
   ipa:{path:"",validation:null,status:null},
-  iphone:{status:null,section:"photos",view:"list",media:{photos:[],music:[]},apps:[],documents:[],bundleId:"",page:0},
+  iphone:{status:null,section:"photos",view:"list",media:{photos:[],music:[]},apps:[],documents:[],bundleId:"",page:0,previews:{}},
   playstation:{paths:[],status:null},
   xbox:{paths:[],status:null},
   switch:{paths:[],status:null}
@@ -100,7 +105,7 @@ const modules={
     render(){
       const c=engineSnapshot?.capabilities||{};
       return [
-        '<div class="card"><h3>Transport core</h3><p>Long-running work is queued in the iNSync engine, not the renderer.</p><div class="rows">'+row("Engine","Queued worker execution",engineSnapshot?.engine?.workers?engineSnapshot.engine.workers+" workers":"Ready","green")+row("File transport","Local, mapped and UNC copy with progress/cancel",c.file_copy?"Ready":"Unavailable",c.file_copy?"green":"red")+row("Android","ADB package and app operations",c.adb?"Ready":"ADB missing",c.adb?"green":"red")+row("iPhone","Photos, apps and Documents through the Apple device bridge",c.ios_bridge?"Ready":"Bridge missing",c.ios_bridge?"green":"red")+row("Clipboard peers","Approved peer text/image transport",c.clipboard_peer?"Ready":"Unavailable",c.clipboard_peer?"green":"red")+'</div><div class="buttonbar"><button class="secondary" data-cmd="engineRefresh">Refresh engine</button></div></div>',
+        '<div class="card"><h3>Transport core</h3><p>Long-running work is queued in the iNSync engine, not the renderer.</p><div class="rows">'+row("Engine","Queued worker execution",engineSnapshot?.engine?.workers?engineSnapshot.engine.workers+" workers":"Ready","green")+row("File transport","Local, mapped and UNC copy with progress/cancel",c.file_copy?"Ready":"Unavailable",c.file_copy?"green":"red")+row("Android","Photos, videos and apps through ADB",c.adb?"Ready":"ADB missing",c.adb?"green":"red")+row("iPhone","Photos, apps and Documents through the Apple device bridge",c.ios_bridge?"Ready":"Bridge missing",c.ios_bridge?"green":"red")+row("Clipboard peers","Approved peer text/image transport",c.clipboard_peer?"Ready":"Unavailable",c.clipboard_peer?"green":"red")+'</div><div class="buttonbar"><button class="secondary" data-cmd="engineRefresh">Refresh engine</button></div></div>',
         '<div class="card"><h3>Connection law</h3><div class="rows">'+row("Green","Provider / sending","Active","green")+row("Blue","Receiver / receiving","Active","blue")+row("Red","Disconnected / inactive","Off","red")+'</div><p style="margin-top:10px">Every popup is one view into the same engine. Device-specific adapters stay capability-gated when a backend is unavailable.</p></div>'
       ];
     }
@@ -150,13 +155,33 @@ const modules={
     }
   },
   android:{
-    title:"Android",sub:"ADB connection, Android package installation and installed-app management.",icon:"android",
+    title:"Android",sub:"Browse phone photos, videos and apps through ADB.",icon:"android",
     render(){
-      const d=data.android,info=d.info?.device||{},storage=d.info?.storage||{};
-      const appRows=d.apps.length?d.apps.map(app=>'<div class="app-row"><div><b>'+esc(app.package)+'</b><span>'+esc(app.kind||"app")+'</span></div><button class="danger" data-cmd="appUninstall" data-package="'+esc(app.package)+'">Delete</button></div>').join(''):'<div class="empty-state">Refresh Apps to list packages.</div>';
+      const d=data.android,info=d.info?.device||{},storage=d.info?.storage||{},section=d.section||"photos";
+      const labels={photos:"Photos",videos:"Videos",apps:"Apps"};
+      const tabs=["photos","videos","apps"].map(x=>'<button class="sectiontab '+(section===x?"active":"")+'" data-cmd="androidSection" data-section="'+x+'">'+labels[x]+'</button>').join("");
+      const viewbar='<div class="viewbar"><button class="view-btn '+(d.view==="list"?"active":"")+'" data-cmd="androidView" data-view="list"><span class="view-list-icon"></span>List</button><button class="view-btn '+(d.view==="large"?"active":"")+'" data-cmd="androidView" data-view="large"><span class="view-large-icon"></span>Large</button></div>';
+      let body="";
+      if(section==="apps"){
+        body='<div class="app-list">'+(d.apps.length?d.apps.map(app=>'<div class="app-row"><div><b>'+esc(app.package)+'</b><span>'+esc(app.kind||"app")+'</span></div><button class="danger" data-cmd="appUninstall" data-package="'+esc(app.package)+'">Delete</button></div>').join(""):'<div class="empty-state">Choose Refresh Apps from Android tools.</div>')+'</div>';
+      }else{
+        const list=d.media[section]||[];
+        body='<div class="media-list '+d.view+'">'+(list.length?list.map(item=>androidMediaRow(item)).join(""):'<div class="empty-state">No '+section+' loaded. Choose Refresh '+labels[section]+' from Android tools.</div>')+'</div>';
+      }
+      const deviceLabel=d.serial||d.devices[0]?.serial||"Auto / first device";
       return [
-        '<div class="card"><div class="control"><label>ADB device</label><select id="adbDevice"><option value="">Auto / first device</option>'+optionList(d.devices,x=>x.serial,x=>x.serial+" | "+x.state,d.serial)+'</select></div><div class="share-path">'+esc(d.packagePaths.length?d.packagePaths.map(x=>x.split(/[\\/]/).pop()).join(" | "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose package</button><button class="primary" data-cmd="apkInstall">Install</button><button class="secondary" data-cmd="adbRefresh">Refresh ADB</button></div><h3 style="margin-top:14px">Apps on device</h3><div class="app-list">'+appRows+'</div><div class="buttonbar"><button class="secondary" data-cmd="appsRefresh">Refresh Apps</button></div></div>',
-        '<div class="card"><h3>Device</h3><div class="rows">'+row("ADB",d.devices.length?(d.serial||d.devices[0].serial):"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",((info.manufacturer||"")+" "+(info.model||"")).trim()||"Refresh device",info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+row("Package install","APK / APKS / XAPK / split APK","Ready",d.devices.length?"green":"")+row("App removal","User and system packages use Android uninstall","Direct","green")+'</div></div>'
+        '<div class="card android-content"><div class="sectiontabs three">'+tabs+'</div>'+viewbar+body+'</div>',
+        '<div class="card"><h3>Device</h3><div class="device-toolbar">'+lumiDevicePicker(deviceLabel)+lumiAndroidTools()+'</div><div class="rows">'+row("ADB",d.devices.length?deviceLabel:"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",((info.manufacturer||"")+" "+(info.model||"")).trim()||"Refresh device",info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+row("Photos / Videos","MediaStore list, save to PC and delete","Ready",d.devices.length?"green":"")+row("Apps","User and system packages","Direct",d.devices.length?"green":"")+'</div></div>'
+      ];
+    }
+  },
+  apk:{
+    title:"APK",sub:"Choose and install APK, APKS/XAPK or split APK sets through ADB.",icon:"apk",
+    render(){
+      const d=data.android,paths=data.apk.paths,deviceLabel=d.serial||d.devices[0]?.serial||"Auto / first device";
+      return [
+        '<div class="card"><div class="device-toolbar">'+lumiDevicePicker(deviceLabel)+lumiAndroidTools(true)+'</div><div class="share-path">'+esc(paths.length?paths.map(x=>x.split(/[\\\\/]/).pop()).join(" | "):"No Android package selected")+'</div><div class="buttonbar"><button class="secondary" data-cmd="apkBrowse">Choose package</button><button class="primary" data-cmd="apkInstall">Install</button></div><div class="rows" style="margin-top:10px">'+row("Formats","APK / APKS / XAPK / split APK","Ready",d.devices.length?"green":"")+row("Device",deviceLabel,d.devices.length?"Connected":"Refresh ADB",d.devices.length?"green":"red")+'</div></div>',
+        '<div class="card"><h3>Installer</h3><p>APK installation uses the same ADB engine as Android without duplicating the phone-content surface.</p><div class="rows" style="margin-top:10px">'+row("ADB backend","Queued outside the renderer",engineSnapshot?.capabilities?.adb?"Ready":"Unavailable",engineSnapshot?.capabilities?.adb?"green":"red")+row("Selected files","Package set",String(paths.length),"")+'</div></div>'
       ];
     }
   },
@@ -214,9 +239,41 @@ function selectedPaths(paths,empty="Nothing selected"){if(!paths?.length)return 
 function iphoneFileRow(item,allowDelete){
   const name=item.name||String(item.path||"").split("/").pop()||item.path||"item";
   const meta=(item.size!==undefined?fmtBytes(item.size):"")+(item.path?" | "+item.path:"");
-  return '<div class="media-row" data-kind="'+esc(item.kind||data.iphone.section)+'"><div><b>'+esc(name)+'</b><span>'+esc(meta)+'</span></div><div class="media-actions"><button class="secondary mini" data-cmd="iphoneFileSave" data-kind="'+esc(item.kind||data.iphone.section)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Send to PC</button>'+(allowDelete?'<button class="danger mini" data-cmd="iphoneFileDelete" data-kind="'+esc(item.kind||data.iphone.section)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Delete</button>':'')+'</div></div>';
+  const kind=item.kind||data.iphone.section;
+  const preview=kind==="photos"?previewFor(data.iphone.previews,{...item,kind}):previewFor({}, {...item,kind});
+  return '<div class="media-row" data-kind="'+esc(kind)+'"><div class="media-row-main">'+preview+'<div class="media-copy"><b>'+esc(name)+'</b><span>'+esc(meta)+'</span></div></div><div class="media-actions"><button class="secondary mini" data-cmd="iphoneFileSave" data-kind="'+esc(kind)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Send to PC</button>'+(allowDelete?'<button class="danger mini" data-cmd="iphoneFileDelete" data-kind="'+esc(kind)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Delete</button>':'')+'</div></div>';
 }
 function optionList(items,valueFn,labelFn,selected){return items.map(x=>{const v=valueFn(x),l=labelFn(x);return '<option value="'+esc(v)+'" '+(v===selected?'selected':'')+'>'+esc(l)+'</option>'}).join('')}
+function lumiCombo(id,label,options,type){
+  const opts=options.map(x=>'<button class="lumi-combobox-option '+(x.active?"active":"")+'" data-lumi-value="'+esc(x.value??"")+'" data-lumi-type="'+esc(type)+'"><strong>'+esc(x.label)+'</strong><small>'+esc(x.meta||"")+'</small></button>').join("");
+  return '<div id="'+esc(id)+'" class="lumi-combobox-host" data-lumi-combo="'+esc(type)+'"><button class="lumi-combo-trigger" type="button"><strong>'+esc(label)+'</strong><span class="lumi-chevron"></span></button><div class="lumi-combobox-list" hidden><div class="lumi-combo-search"><span class="search-mark"></span><input type="text" placeholder="Search choices..." autocomplete="off"></div>'+opts+'</div></div>';
+}
+function lumiDevicePicker(label){
+  const d=data.android;
+  const options=[{value:"",label:"Auto / first device",meta:"ADB",active:!d.serial},...d.devices.map(x=>({value:x.serial,label:x.serial,meta:x.state||"device",active:x.serial===d.serial}))];
+  return lumiCombo("androidDeviceCombo",label,options,"adb-device");
+}
+function lumiAndroidTools(apkMode=false){
+  const section=data.android.section||"photos";
+  const options=[
+    {value:"adbRefresh",label:"Refresh ADB",meta:"device"},
+    {value:"appsRefresh",label:"Refresh Apps",meta:"packages"},
+    {value:"androidRefreshMedia",label:"Refresh "+(section==="videos"?"Videos":"Photos"),meta:"media"},
+    {value:"openApk",label:apkMode?"Android content":"APK installer",meta:apkMode?"phone":"install"}
+  ];
+  return lumiCombo("androidToolsCombo","Android tools",options,"android-tool");
+}
+function previewFor(store,item){
+  const src=store[item.path];
+  if(src)return '<img class="media-thumb" src="'+src+'" alt="">';
+  const kind=String(item.kind||"").toLowerCase();
+  const label=kind==="videos"?"VIDEO":kind==="music"?"MUSIC":kind==="photos"?"PHOTO":"FILE";
+  return '<span class="media-placeholder">'+label+'</span>';
+}
+function androidMediaRow(item){
+  const meta=(item.size?fmtBytes(item.size)+" | ":"")+(item.path||"");
+  return '<div class="media-row" data-kind="'+esc(item.kind||data.android.section)+'"><div class="media-row-main">'+previewFor(data.android.previews,item)+'<div class="media-copy"><b>'+esc(item.name||item.path)+'</b><span>'+esc(meta)+'</span></div></div><div class="media-actions"><button class="secondary mini" data-cmd="androidFileSave" data-kind="'+esc(item.kind||data.android.section)+'" data-path="'+esc(item.path||"")+'">Send to PC</button><button class="danger mini" data-cmd="androidFileDelete" data-kind="'+esc(item.kind||data.android.section)+'" data-path="'+esc(item.path||"")+'">Delete</button></div></div>';
+}
 function peerTag(peer){const role=(peer.role||"idle").toLowerCase();if(role==="provider")return tag("Provider","green");if(role==="receiver")return tag("Receiver","blue");return tag(peer.approved===false?"Unapproved":"Idle","red")}
 function peerRowHtml(peer){
   const detail=(peer.self?"This PC | ":"")+(peer.ip||"local")+" | "+(peer.scope||"idle");
@@ -246,12 +303,13 @@ function renderModule(){
   $("#modalTitle").innerHTML=moduleIcon(m.icon||currentModule)+'<div><h2>'+esc(m.title)+'</h2><p>'+esc(m.sub)+'</p></div>';
   $("#modalBody").innerHTML=m.render().join("");
   wireControls();
+  schedulePreviewHydration();
 }
 function openModule(key){
   currentModule=key;renderModule();$("#backdrop").classList.add("open");
   if(key==="home")refreshEngine();
   if(key==="sharing")submit("sharing.status",{},"sharing",true);
-  if(key==="android")submit("adb.devices",{},"android",true);
+  if(key==="android"||key==="apk")submit("adb.devices",{},key,true);
   if(key==="pc"||key==="clipboard")submit("peer.list",{},key,true);
   if(key==="iphone"){submit("ios.status",{},"iphone",true);submit("ios.apps",{},"iphone",true);submit("ios.media.list",{kind:"photos"},"iphone",true)}
   if(key==="ipa")submit("ios.status",{},"ipa",true);
@@ -272,7 +330,7 @@ async function submit(operation,params={},context=null,quiet=false){
   try{
     const r=await window.ttg.backend.submit(operation,params);
     if(!r?.job)throw new Error(r?.message||"Engine did not return a job");
-    rememberJob(r.job,context,operation);setJob(r.job);if(!quiet)toast("Queued: "+operation);return r.job.id;
+    rememberJob(r.job,context,operation);if(!quiet){setJob(r.job);toast("Queued: "+operation)}return r.job.id;
   }catch(e){toast(e.message||"Engine unavailable");return ""}
 }
 async function refreshEngine(){
@@ -285,14 +343,18 @@ function handleFinished(job){
   if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[]}
   if(job.operation==="peer.approve")submit("peer.list",{},currentModule,true);
   if(job.operation==="peer.configure"&&r.peer){data.pc.role=r.peer.role||data.pc.role;data.pc.scope=r.peer.scope||data.pc.scope;data.pc.sharedPaths=r.peer.shared_paths||data.pc.sharedPaths;const c=roleColor(data.pc.role);apply({connection:c});window.ttg.stateSet({connection:c});submit("peer.list",{},null,true)}
-  if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial)submit("adb.info",{serial:data.android.serial},"android",true)}
+  if(job.operation==="adb.devices"){data.android.devices=r.devices||[];if(data.android.devices.length&&!data.android.serial)data.android.serial=data.android.devices[0].serial;if(data.android.serial){submit("adb.info",{serial:data.android.serial},"android",true);if(currentModule==="android"){if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true)}}}
   if(job.operation==="adb.info")data.android.info=r;
-  if(job.operation==="adb.apps"){data.android.apps=r.apps||[];data.android.page=0}
+  if(job.operation==="adb.apps")data.android.apps=r.apps||[];
+  if(job.operation==="adb.media.list"&&r.kind)data.android.media[r.kind]=r.items||[];
+  if(job.operation==="adb.media.preview"&&r.remote_path){data.android.previews[r.remote_path]=r.data_url||"";previewPending.delete("android:"+r.remote_path)}
+  if(job.operation==="adb.media.delete"&&r.kind)submit("adb.media.list",{serial:data.android.serial,kind:r.kind},"android",true);
   if(job.operation==="adb.uninstall"||job.operation==="adb.disable")submit("adb.apps",{serial:data.android.serial},"android",true);
   if(job.operation==="ios.status"){if(meta.context==="ipa")data.ipa.status=r;else data.iphone.status=r}
   if(job.operation==="ios.validate"){data.ipa.validation=r;if(r.ok&&meta.context==="validate-install")submit("ios.ipa",{path:data.ipa.path},"ipa",false)}
   if(job.operation==="ios.apps")data.iphone.apps=r.apps||[];
   if(job.operation==="ios.media.list"&&r.kind)data.iphone.media[r.kind]=r.items||[];
+  if(job.operation==="ios.media.preview"&&r.remote_path){data.iphone.previews[r.remote_path]=r.data_url||"";previewPending.delete("iphone:"+r.remote_path)}
   if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id}
   if(job.operation==="ios.app.uninstall")submit("ios.apps",{},"iphone",true);
   if(job.operation==="ios.media.delete"&&r.kind)submit("ios.media.list",{kind:r.kind},"iphone",true);
@@ -310,10 +372,29 @@ window.ttg.onBackendEvent(evt=>{
 });
 
 function wireControls(){
-  const adbDevice=$("#adbDevice");if(adbDevice)adbDevice.onchange=e=>{data.android.serial=e.target.value;if(data.android.serial)submit("adb.info",{serial:data.android.serial},"android",true)};
   const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)};
+  $$("[data-lumi-combo]").forEach(host=>{
+    const trigger=host.querySelector(".lumi-combo-trigger"),list=host.querySelector(".lumi-combobox-list"),search=host.querySelector(".lumi-combo-search input");
+    trigger.onclick=e=>{e.stopPropagation();const opening=list.hidden;$$(".lumi-combobox-list").forEach(x=>x.hidden=true);$$(".lumi-combobox-host").forEach(x=>x.classList.remove("open"));list.hidden=!opening;host.classList.toggle("open",opening);if(opening)setTimeout(()=>search?.focus(),0)};
+    if(search)search.oninput=()=>{const q=search.value.trim().toLowerCase();host.querySelectorAll(".lumi-combobox-option").forEach(o=>o.hidden=q&&!o.textContent.toLowerCase().includes(q))};
+    host.querySelectorAll(".lumi-combobox-option").forEach(o=>o.onclick=()=>{const type=o.dataset.lumiType,value=o.dataset.lumiValue;list.hidden=true;host.classList.remove("open");if(type==="adb-device"){data.android.serial=value;if(!data.android.serial&&data.android.devices.length)data.android.serial=data.android.devices[0].serial;if(data.android.serial){submit("adb.info",{serial:data.android.serial},"android",true);if(currentModule==="android"){if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true)}}renderModule()}else if(type==="android-tool"){command(value,o)}});
+  });
   $$("[data-cmd]").forEach(x=>x.onclick=()=>command(x.dataset.cmd,x));
 }
+const previewPending=new Set();
+function schedulePreviewHydration(){
+  if(currentModule==="android"&&data.android.view==="large"&&data.android.section==="photos"){
+    (data.android.media.photos||[]).slice(0,18).forEach(item=>{
+      const key="android:"+item.path;if(!item.path||data.android.previews[item.path]||previewPending.has(key)||item.size>8*1024*1024)return;previewPending.add(key);submit("adb.media.preview",{serial:data.android.serial,remote_path:item.path},"android-preview",true);
+    });
+  }
+  if(currentModule==="iphone"&&data.iphone.view==="large"&&data.iphone.section==="photos"){
+    (data.iphone.media.photos||[]).slice(0,18).forEach(item=>{
+      const key="iphone:"+item.path;if(!item.path||data.iphone.previews[item.path]||previewPending.has(key)||item.size>8*1024*1024)return;previewPending.add(key);submit("ios.media.preview",{kind:"photos",remote_path:item.path},"iphone-preview",true);
+    });
+  }
+}
+document.addEventListener("click",e=>{if(!e.target.closest(".lumi-combobox-host")){$$(".lumi-combobox-list").forEach(x=>x.hidden=true);$$(".lumi-combobox-host").forEach(x=>x.classList.remove("open"))}});
 function syncClipboardControls(){
   data.clipboard.types.text=!!$("#clipTypeText")?.checked;data.clipboard.types.image=!!$("#clipTypeImage")?.checked;data.clipboard.types.files=!!$("#clipTypeFiles")?.checked;
   data.clipboard.direction=$("#clipDirection")?.value||"two-way";data.clipboard.targets=$$("[data-peer-id]:checked").map(x=>x.dataset.peerId);
@@ -339,11 +420,17 @@ async function command(cmd,b){
   if(cmd==="clipboardApply"){syncClipboardControls();await window.ttg.stateSet({mode:"clipboard",clipboardEnabled:state.clipboardEnabled});toast("Clipboard selection applied");renderModule();return}
   if(cmd==="clipText"){syncClipboardControls();const c=await window.ttg.clipboard.readText();submit("clipboard.text",{text:c.text,targets:data.clipboard.targets,direction:data.clipboard.direction},"clipboard");return}
   if(cmd==="clipImage"){syncClipboardControls();const c=await window.ttg.clipboard.readImage();submit("clipboard.image",{data_url:c.dataUrl,targets:data.clipboard.targets,direction:data.clipboard.direction},"clipboard");return}
-  if(cmd==="adbRefresh"){submit("adb.devices",{},"android",true);return}
-  if(cmd==="apkBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose Android package",multi:true,filters:[{name:"Android packages",extensions:["apk","apks","xapk"]}]});if(!r.canceled){data.android.packagePaths=r.paths;renderModule()}return}
-  if(cmd==="apkInstall"){submit("adb.install",{paths:data.android.packagePaths,serial:data.android.serial},"android");return}
-  if(cmd==="appsRefresh"){submit("adb.apps",{serial:data.android.serial},"android");return}
-  if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\n\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},"android");return}
+  if(cmd==="adbRefresh"){submit("adb.devices",{},currentModule,true);return}
+  if(cmd==="apkBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose Android package",multi:true,filters:[{name:"Android packages",extensions:["apk","apks","xapk"]}]});if(!r.canceled){data.apk.paths=r.paths;renderModule()}return}
+  if(cmd==="apkInstall"){if(!data.apk.paths.length){toast("Choose an Android package first");return}submit("adb.install",{paths:data.apk.paths,serial:data.android.serial},"apk");return}
+  if(cmd==="openApk"){openModule(currentModule==="apk"?"android":"apk");return}
+  if(cmd==="appsRefresh"){data.android.section="apps";submit("adb.apps",{serial:data.android.serial},"android",true);renderModule();return}
+  if(cmd==="androidRefreshMedia"){if(data.android.section==="apps")data.android.section="photos";submit("adb.media.list",{serial:data.android.serial,kind:data.android.section==="videos"?"videos":"photos"},"android",true);renderModule();return}
+  if(cmd==="androidSection"){data.android.section=b.dataset.section||"photos";renderModule();if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true);return}
+  if(cmd==="androidView"){data.android.view=b.dataset.view==="large"?"large":"list";renderModule();return}
+  if(cmd==="androidFileSave"){const dest=await window.ttg.dialog.openFolder({title:"Save Android content to PC"});if(dest.canceled)return;submit("adb.media.pull",{serial:data.android.serial,kind:b.dataset.kind||data.android.section,remote_path:b.dataset.path||"",destination:dest.path},"android");return}
+  if(cmd==="androidFileDelete"){const kind=b.dataset.kind||data.android.section,path=b.dataset.path||"";if(!path||!confirm("Delete this item from the Android device?\\n\\n"+path))return;submit("adb.media.delete",{serial:data.android.serial,kind,remote_path:path},"android");return}
+  if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\\n\\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},"android");return}
   if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.ipa.path=r.paths[0]||"";data.ipa.validation=null;renderModule()}return}
   if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
   if(cmd==="ipaStatus"){submit("ios.status",{},"ipa",true);return}

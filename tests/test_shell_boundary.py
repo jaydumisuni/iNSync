@@ -43,8 +43,10 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('data-module="android" data-label="Android"', renderer)
         self.assertIn('data-module="iphone" data-label="iPhone"', renderer)
         self.assertIn('data-module="ipa" data-label="IPA"', renderer)
+        self.assertIn('data-module="apk" data-label="APK"', renderer)
         self.assertNotIn('actionTile("apk"', renderer)
         self.assertIn('title:"Android"', renderer)
+        self.assertIn('title:"APK"', renderer)
         self.assertIn('title:"IPA"', renderer)
         self.assertIn('title:"iPhone"', renderer)
         for token in (
@@ -139,9 +141,10 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('class="maximize-glyph"', renderer)
         self.assertIn('class="modal-window-btn close"', renderer)
         self.assertNotIn('>Max</button>', renderer)
-        self.assertNotIn(".icon-apk", renderer)
+        self.assertIn(".icon-apk", renderer)
+        self.assertIn('data-module="apk" data-label="APK"', renderer)
         icon_root = ROOT / "app" / "electron" / "renderer" / "assets" / "icons"
-        for name in ("sharing","playstation","xbox","switch","iphone","ipa","android","files","clipboard","pc","home"):
+        for name in ("sharing","playstation","xbox","switch","iphone","ipa","apk","android","files","clipboard","pc","home"):
             self.assertTrue((icon_root / f"{name}.png").is_file(), name)
 
     def test_widget_stays_expanded_during_interaction(self):
@@ -156,6 +159,78 @@ class ShellBoundaryTests(unittest.TestCase):
             'collapseTimer=setTimeout',
         ):
             self.assertIn(token, widget)
+
+
+    def test_android_content_and_apk_are_separate_surfaces_with_shared_adb_engine(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'const labels={photos:"Photos",videos:"Videos",apps:"Apps"}',
+            'data-cmd="androidSection"',
+            'data-cmd="androidView"',
+            'data-cmd="androidFileSave"',
+            'data-cmd="androidFileDelete"',
+            'title:"APK"',
+            'data-cmd="apkBrowse"',
+            'data-cmd="apkInstall"',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            '"adb.media.list"',
+            '"adb.media.preview"',
+            '"adb.media.pull"',
+            '"adb.media.delete"',
+            '"adb.install"',
+        ):
+            self.assertIn(token, backend)
+        self.assertIn("content://media/external/", backend)
+        self.assertIn('exec-out", "cat"', backend)
+        self.assertNotIn("packagePaths", renderer)
+
+    def test_lumi_combobox_contract_is_used_for_android_controls(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            ".lumi-combobox-host",
+            ".lumi-combobox-list",
+            ".lumi-combobox-option",
+            'placeholder="Search choices..."',
+            'function lumiDevicePicker(label)',
+            'function lumiAndroidTools(apkMode=false)',
+            'class="lumi-chevron"',
+        ):
+            self.assertIn(token, renderer)
+        self.assertNotIn('id="adbDevice"', renderer)
+
+    def test_large_media_view_uses_real_preview_images(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'class="media-thumb"',
+            'data.android.previews',
+            'data.iphone.previews',
+            'schedulePreviewHydration()',
+            '"adb.media.preview"',
+            '"ios.media.preview"',
+        ):
+            self.assertIn(token, renderer if token != '"ios.media.preview"' else renderer)
+        self.assertIn("base64.b64encode(raw)", backend)
+        self.assertIn("get_file_contents(remote)", backend)
+
+    def test_widget_uses_original_three_state_glass_controls_with_mode_dropdown(self):
+        widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
+        for token in (
+            'class="state-pill disconnected"',
+            'class="state-pill receiving"',
+            'class="state-pill sending"',
+            'data-state="disconnected"',
+            'data-state="receiving"',
+            'data-state="sending"',
+            'id="modeCombo"',
+            'class="chev"',
+            'data-mode="clipboard"',
+        ):
+            self.assertIn(token, widget)
+        self.assertNotIn('<select id="mode">', widget)
 
 
 if __name__ == "__main__":

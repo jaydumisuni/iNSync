@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.util
 import json
 import os
@@ -215,6 +216,47 @@ def run_process(
         time.sleep(0.1)
     out, err = proc.communicate()
     return proc.returncode, out.strip(), err.strip()
+
+
+def run_process_bytes(
+    job: Job,
+    cmd: list[str],
+    *,
+    timeout: float = 45,
+    max_bytes: int = 10 * 1024 * 1024,
+) -> tuple[int, bytes, str]:
+    # Use a temporary file for binary stdout so a large image cannot fill a
+    # PIPE buffer and stall the child while the cancellation loop is polling.
+    with tempfile.TemporaryFile() as binary_out:
+        proc = subprocess.Popen(
+            cmd,
+            shell=False,
+            stdout=binary_out,
+            stderr=subprocess.PIPE,
+            creationflags=(subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0),
+        )
+        job.process = proc
+        started = time.time()
+        while proc.poll() is None:
+            if job.cancel.is_set():
+                try:
+                    proc.terminate()
+                finally:
+                    raise Cancelled()
+            if time.time() - started > timeout:
+                try:
+                    proc.kill()
+                finally:
+                    raise TimeoutError(f"Command timed out after {timeout:g}s")
+            time.sleep(0.1)
+        _, err = proc.communicate()
+        binary_out.seek(0, os.SEEK_END)
+        size = binary_out.tell()
+        if size > max_bytes:
+            return 2, b"", f"Preview is larger than {max_bytes // (1024 * 1024)} MB"
+        binary_out.seek(0)
+        out = binary_out.read()
+    return proc.returncode, out, err.decode("utf-8", errors="replace").strip()
 
 
 def run_quick(cmd: list[str], timeout: float = 20) -> tuple[int, str, str]:
@@ -579,6 +621,155 @@ def adb_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "counts": {"user": len(user), "system": len(system)},
         "message": f"{len(user)} user / {len(system)} system app(s)",
         "error": "\n".join(x for x in (err_user if rc_user else "", err_sys if rc_sys else "") if x),
+    }
+
+
+
+ANDROID_MEDIA_ROOTS = {
+    "photos": ["/sdcard/DCIM", "/sdcard/Pictures"],
+    "videos": ["/sdcard/DCIM", "/sdcard/Movies"],
+}
+ANDROID_MEDIA_EXTS = {
+    "photos": {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".dng"},
+    "videos": {".mp4", ".mov", ".mkv", ".webm", ".3gp", ".avi", ".m4v"},
+}
+
+
+def _android_media_kind(kind: str) -> str:
+    value = str(kind or "photos").lower()
+    if value not in ANDROID_MEDIA_ROOTS:
+        raise ValueError("Unknown Android media category")
+    return value
+
+
+def adb_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    kind = _android_media_kind(str(job.params.get("kind") or "photos"))
+    serial = str(job.params.get("serial") or "")
+    media_type = "images" if kind == "photos" else "video"
+    uri = f"content://media/external/{media_type}/media"
+    engine.progress(job, 12, f"Reading Android {kind}")
+    rc, out, err = run_process(
+        job,
+        _adb_prefix(serial) + [
+            "shell", "content", "query",
+            "--uri", uri,
+            "--projection", "_id:_display_name:_data:_size",
+        ],
+        timeout=30,
+    )
+    items: list[dict[str, Any]] = []
+    if rc == 0:
+        for line in out.splitlines():
+            if not line.startswith("Row:"):
+                continue
+            values: dict[str, str] = {}
+            payload = line.split(" ", 2)[-1]
+            for part in payload.split(", "):
+                if "=" in part:
+                    key, value = part.split("=", 1)
+                    values[key.strip()] = value.strip()
+            remote = values.get("_data", "")
+            if not remote:
+                continue
+            try:
+                size = int(values.get("_size") or 0)
+            except ValueError:
+                size = 0
+            items.append({
+                "kind": kind,
+                "id": values.get("_id", ""),
+                "path": remote,
+                "name": values.get("_display_name") or posixpath.basename(remote),
+                "size": size,
+            })
+            if len(items) >= 300:
+                break
+    items.reverse()
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "kind": kind,
+        "items": items,
+        "message": f"{len(items)} Android {kind} item(s)",
+        "error": err if rc else "",
+    }
+
+
+def _android_preview_mime(path: str) -> str:
+    suffix = Path(path).suffix.lower()
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".heic": "image/heic",
+        ".heif": "image/heif",
+        ".dng": "image/x-adobe-dng",
+    }.get(suffix, "")
+
+
+def adb_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    remote = str(job.params.get("remote_path") or "").strip()
+    serial = str(job.params.get("serial") or "")
+    kind = str(job.params.get("kind") or "photos").lower()
+    mime = _android_preview_mime(remote)
+    if not remote or not mime:
+        return unavailable("Preview is available for Android image files only", remote_path=remote)
+    engine.progress(job, 18, "Reading Android image preview")
+    rc, raw, err = run_process_bytes(
+        job,
+        _adb_prefix(serial) + ["exec-out", "cat", remote],
+        timeout=45,
+        max_bytes=8 * 1024 * 1024,
+    )
+    if rc != 0 or not raw:
+        return unavailable(err or "Could not read Android image preview", remote_path=remote)
+    return ok(
+        "Android preview ready",
+        kind=kind,
+        remote_path=remote,
+        data_url=f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}",
+    )
+
+
+def adb_media_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    remote = str(job.params.get("remote_path") or "").strip()
+    destination_raw = str(job.params.get("destination") or "").strip()
+    serial = str(job.params.get("serial") or "")
+    if not remote or not destination_raw:
+        return unavailable("Choose Android content and a PC destination")
+    destination = Path(destination_raw)
+    destination.mkdir(parents=True, exist_ok=True)
+    engine.progress(job, 15, "Sending Android content to PC")
+    rc, out, err = run_process(job, _adb_prefix(serial) + ["pull", remote, str(destination)], timeout=600)
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "kind": str(job.params.get("kind") or ""),
+        "remote_path": remote,
+        "destination": str(destination),
+        "message": out or err or ("Saved to PC" if rc == 0 else "Transfer failed"),
+    }
+
+
+def adb_media_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    remote = str(job.params.get("remote_path") or "").strip()
+    serial = str(job.params.get("serial") or "")
+    kind = _android_media_kind(str(job.params.get("kind") or "photos"))
+    if not remote:
+        return unavailable("Choose Android content before deleting it", kind=kind)
+    roots = ANDROID_MEDIA_ROOTS[kind]
+    normalized = posixpath.normpath(remote)
+    if not any(normalized == root or normalized.startswith(root + "/") for root in roots):
+        return unavailable("Android media delete path is outside the selected media scope", kind=kind)
+    engine.progress(job, 20, f"Deleting Android {kind[:-1] if kind.endswith('s') else kind}")
+    rc, out, err = run_process(job, _adb_prefix(serial) + ["shell", "rm", "-f", remote], timeout=90)
+    return {
+        "ok": rc == 0,
+        "available": True,
+        "kind": kind,
+        "remote_path": remote,
+        "message": out or err or ("Deleted" if rc == 0 else "Delete failed"),
     }
 
 
@@ -1419,6 +1610,51 @@ def ios_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable(f"Could not list iPhone {kind}: {exc}", kind=kind, items=[])
 
 
+
+def _ios_preview_mime(path: str) -> str:
+    suffix = Path(path).suffix.lower()
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".heic": "image/heic",
+        ".heif": "image/heif",
+        ".dng": "image/x-adobe-dng",
+    }.get(suffix, "")
+
+
+async def _ios_media_preview_pmd(kind: str, remote_path: str, serial: str = "") -> bytes:
+    from pymobiledevice3.services.afc import AfcService
+
+    remote = _ios_scoped_remote(kind, remote_path)
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with AfcService(lockdown=lockdown) as afc:
+            return await afc.get_file_contents(remote)
+
+
+def ios_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    kind = str(job.params.get("kind") or "photos").lower()
+    remote_path = str(job.params.get("remote_path") or "")
+    mime = _ios_preview_mime(remote_path)
+    if kind != "photos" or not remote_path or not mime:
+        return unavailable("Preview is available for iPhone image files only", kind=kind, remote_path=remote_path)
+    if not _pmd_available():
+        return unavailable("Photo preview requires the bundled Apple device bridge", kind=kind, remote_path=remote_path)
+    engine.progress(job, 18, "Reading iPhone photo preview")
+    try:
+        raw = _run_async(_ios_media_preview_pmd(kind, remote_path, str(job.params.get("serial") or "")))
+        if len(raw) > 8 * 1024 * 1024:
+            return unavailable("Photo is too large for an inline preview", kind=kind, remote_path=remote_path)
+        return ok(
+            "iPhone preview ready",
+            kind=kind,
+            remote_path=remote_path,
+            data_url=f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}",
+        )
+    except Exception as exc:
+        return unavailable(f"Could not read iPhone photo preview: {exc}", kind=kind, remote_path=remote_path)
+
+
 async def _ios_media_pull_pmd(kind: str, remote_path: str, destination: Path, serial: str = "") -> Path:
     from pymobiledevice3.services.afc import AfcService
 
@@ -1665,6 +1901,10 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.devices": adb_devices_job,
     "adb.info": adb_info_job,
     "adb.apps": adb_apps_job,
+    "adb.media.list": adb_media_list_job,
+    "adb.media.preview": adb_media_preview_job,
+    "adb.media.pull": adb_media_pull_job,
+    "adb.media.delete": adb_media_delete_job,
     "adb.install": adb_install_job,
     "adb.uninstall": adb_uninstall_job,
     "adb.disable": adb_disable_job,
@@ -1680,6 +1920,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "ios.apps": ios_apps_job,
     "ios.app.uninstall": ios_app_uninstall_job,
     "ios.media.list": ios_media_list_job,
+    "ios.media.preview": ios_media_preview_job,
     "ios.media.pull": ios_media_pull_job,
     "ios.media.delete": ios_media_delete_job,
     "ios.documents.list": ios_documents_list_job,
@@ -1701,6 +1942,7 @@ def snapshot() -> dict[str, Any]:
             "network_sharing": sys.platform == "win32",
             "file_copy": True,
             "adb": bool(adb),
+            "android_media": bool(adb),
             "ios": _pmd_available() or bool(command_path("idevice_id")),
             "ios_bridge": _pmd_available(),
             "ios_media": _pmd_available(),

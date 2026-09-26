@@ -6,16 +6,16 @@
   "renderer": {
     "entry": "renderer/index.html",
     "kind": "self-contained-html",
-    "sha256": "ea8270dc5e06028ac961a88259f65d4e9ab8bd7e914c42e7f96483846ceb7755",
+    "sha256": "b22c6e04afefda1ff9405a38359ff12644941c8e6cfb98901d8b9f1524ac61cf",
     "widget": "renderer/widget.html",
-    "widgetSha256": "3aeafb7d8bc8d9b7a071bb4b434e96014373e588773c0e88ce23d42a36d832fb"
+    "widgetSha256": "23410c1a4670ba189c2a3317bfcc39f8aef7c11cb653c6f5aff3cb599c52cac7"
   },
   "backend": {
     "manifest": "backend-manifest.json",
     "transport": "jsonl-rpc-stdio-events",
     "ownership": "product backend",
     "configured": true,
-    "sha256": "8bbe03165780a412efff64b892ccfd17b53d193cf981a0ba0f0cca1a317bcaeb",
+    "sha256": "f63dcf8244e591e73c20f7b32dd430564b9992f7c57513e11054768196d99146",
     "jobEngine": {
       "workers": 2,
       "progressEvents": true,
@@ -26,7 +26,10 @@
       "appleDeviceBridge": true,
       "iosMedia": true,
       "iosApps": true,
-      "iosDocuments": true
+      "iosDocuments": true,
+      "androidMedia": true,
+      "androidMediaPreview": true,
+      "iosMediaPreview": true
     }
   },
   "handoff": {
