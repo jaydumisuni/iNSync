@@ -2727,9 +2727,10 @@ def ios_app_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable(f"App delete failed: {exc}", bundle_id=bundle_id)
 
 
+IOS_CAMERA_ROLL_ROOT = "DCIM"
 IOS_MEDIA_ROOTS = {
-    "photos": "DCIM",
-    "videos": "DCIM",
+    "photos": IOS_CAMERA_ROLL_ROOT,
+    "videos": IOS_CAMERA_ROLL_ROOT,
     "music": "iTunes_Control/Music",
 }
 IOS_PHOTO_EXTS = {".jpg", ".jpeg", ".heic", ".png", ".dng", ".aae"}
@@ -2791,7 +2792,7 @@ def ios_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     engine.progress(job, 15, f"Reading iPhone {kind}")
     try:
         items = _run_async(_ios_media_list_pmd(kind, str(job.params.get("serial") or "")))
-        return ok(f"{len(items)} {kind} item(s)", kind=kind, items=items)
+        return ok(f"{len(items)} {kind} item(s)", kind=kind, source="camera-roll" if kind in {"photos", "videos"} else "media-library", items=items)
     except Exception as exc:
         return unavailable(f"Could not list iPhone {kind}: {exc}", kind=kind, items=[])
 

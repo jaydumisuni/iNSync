@@ -464,7 +464,7 @@ class ShellBoundaryTests(unittest.TestCase):
             "def _video_frame_from_command(",
             "def _video_frame_from_file(",
             'if kind == "videos":',
-            '"videos": "DCIM"',
+            'IOS_CAMERA_ROLL_ROOT = "DCIM"',
             "IOS_VIDEO_EXTS",
             '"media_video_preview": bool(ffmpeg_path())',
         ):
@@ -472,6 +472,26 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('"imageio-ffmpeg>=0.5,<1"', config)
         self.assertIn('"imageio_ffmpeg"', config)
 
+    def test_phone_lists_have_compact_blended_search_and_iphone_camera_roll_scope(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            '.list-search{height:34px',
+            'id="androidListSearch"',
+            'id="iphoneListSearch"',
+            'id="apkAppSearch"',
+            'data.android.search[section]',
+            'data.iphone.search[section]',
+            'Camera Roll only / frames / send to PC / delete',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            'IOS_CAMERA_ROLL_ROOT = "DCIM"',
+            '"photos": IOS_CAMERA_ROLL_ROOT',
+            '"videos": IOS_CAMERA_ROLL_ROOT',
+            'source="camera-roll" if kind in {"photos", "videos"} else "media-library"',
+        ):
+            self.assertIn(token, backend)
     def test_widget_peer_list_scrolls_and_each_peer_can_be_removed(self):
         widget = (ROOT / "app" / "electron" / "renderer" / "widget.html").read_text(encoding="utf-8")
         for token in (
