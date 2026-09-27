@@ -323,6 +323,15 @@ function revealMainWindow(w){
   broadcastState();
 }
 
+async function visibleDialogOwner(){
+  showMain();
+  await new Promise(resolve=>setTimeout(resolve,80));
+  const w=mainWindow;
+  if(!w||w.isDestroyed()||!w.isVisible())return undefined;
+  try{w.moveTop();w.focus()}catch{}
+  return w;
+}
+
 function showMain(){
   const w=createMain();
   if(w.webContents.isLoadingMainFrame()){
@@ -406,7 +415,8 @@ if(!gotLock){
       return state;
     });
     ipcMain.handle("insync:dialog:files",async(_e,options={})=>{
-      const result=await dialog.showOpenDialog(mainWindow||undefined,{
+      const owner=await visibleDialogOwner();
+      const result=await dialog.showOpenDialog(owner,{
         title:String(options.title||"Choose files").slice(0,100),
         properties:["openFile",...(options.multi===false?[]:["multiSelections"])],
         filters:safeFilters(options)
@@ -414,7 +424,8 @@ if(!gotLock){
       return {canceled:result.canceled,paths:result.filePaths};
     });
     ipcMain.handle("insync:dialog:folder",async(_e,options={})=>{
-      const result=await dialog.showOpenDialog(mainWindow||undefined,{
+      const owner=await visibleDialogOwner();
+      const result=await dialog.showOpenDialog(owner,{
         title:String(options.title||"Choose folder").slice(0,100),
         properties:["openDirectory","createDirectory"]
       });

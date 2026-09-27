@@ -530,6 +530,26 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, widget)
 
+    def test_pc_bound_transfers_restore_main_window_before_destination_dialog(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            "async function visibleDialogOwner()",
+            "showMain();",
+            "if(!w||w.isDestroyed()||!w.isVisible())return undefined",
+            "dialog.showOpenDialog(owner",
+        ):
+            self.assertIn(token, main)
+        for token in (
+            "async function choosePcFolder(title)",
+            "await window.ttg.showMain()",
+            'toast("Save to: "+dest.path)',
+            'choosePcFolder("Save Android content to PC")',
+            'choosePcFolder("Get "+pkg+" to PC")',
+            'choosePcFolder("Save iPhone file to PC")',
+        ):
+            self.assertIn(token, renderer)
+
     def test_backend_timeout_and_renderer_recovery_prevent_indefinite_freeze(self):
         sidecar = (ROOT / "app" / "electron" / "sidecar.cjs").read_text(encoding="utf-8")
         main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")

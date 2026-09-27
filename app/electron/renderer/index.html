@@ -379,6 +379,14 @@ function rememberJob(job,context,operation){
 function updateRemembered(job){
   const meta=jobs.get(job.id);if(meta){meta.job={...job};const r=recentJobs.find(x=>x.job.id===job.id);if(r)r.job={...job}}
 }
+async function choosePcFolder(title){
+  try{await window.ttg.showMain()}catch{}
+  const dest=await window.ttg.dialog.openFolder({title});
+  if(dest?.canceled||!dest?.path)return "";
+  toast("Save to: "+dest.path);
+  return dest.path;
+}
+
 async function submit(operation,params={},context=null,quiet=false){
   try{
     const r=await window.ttg.backend.submit(operation,params);
@@ -545,9 +553,9 @@ async function command(cmd,b){
   if(cmd==="androidRefreshMedia"){if(data.android.section==="apps")data.android.section="photos";submit("adb.media.list",{serial:data.android.serial,kind:data.android.section==="videos"?"videos":"photos"},"android",true);renderModule();return}
   if(cmd==="androidSection"){data.android.section=b.dataset.section||"photos";renderModule();if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true);return}
   if(cmd==="androidView"){data.android.view=b.dataset.view==="large"?"large":"list";renderModule();return}
-  if(cmd==="androidFileSave"){const dest=await window.ttg.dialog.openFolder({title:"Save Android content to PC"});if(dest.canceled)return;submit("adb.media.pull",{serial:data.android.serial,kind:b.dataset.kind||data.android.section,remote_path:b.dataset.path||"",destination:dest.path},"android");return}
+  if(cmd==="androidFileSave"){const destination=await choosePcFolder("Save Android content to PC");if(!destination)return;submit("adb.media.pull",{serial:data.android.serial,kind:b.dataset.kind||data.android.section,remote_path:b.dataset.path||"",destination},"android");return}
   if(cmd==="androidFileDelete"){const kind=b.dataset.kind||data.android.section,path=b.dataset.path||"";if(!path||!confirm("Delete this item from the Android device?\\n\\n"+path))return;submit("adb.media.delete",{serial:data.android.serial,kind,remote_path:path},"android");return}
-  if(cmd==="appGet"){const pkg=b.dataset.package||"";if(!pkg)return;const dest=await window.ttg.dialog.openFolder({title:"Get "+pkg+" to PC"});if(dest.canceled)return;submit("adb.app.export",{package:pkg,serial:data.android.serial,destination:dest.path},"apk");return}
+  if(cmd==="appGet"){const pkg=b.dataset.package||"";if(!pkg)return;const destination=await choosePcFolder("Get "+pkg+" to PC");if(!destination)return;submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},"apk");return}
   if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\\n\\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},currentModule==="apk"?"apk":"android");return}
   if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.ipa.path=r.paths[0]||"";data.ipa.validation=null;renderModule()}return}
   if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
@@ -561,7 +569,7 @@ async function command(cmd,b){
   if(cmd==="iphoneDocsRefresh"){if(!data.iphone.bundleId){toast("Choose an app first");return}submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
   if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send file to app Documents",multi:false});if(!r.canceled)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_path:r.paths[0]},"iphone");return}
   if(cmd==="iphoneMediaRefresh"){submit("ios.media.list",{kind:b.dataset.kind||data.iphone.section},"iphone",true);return}
-  if(cmd==="iphoneFileSave"){const dest=await window.ttg.dialog.openFolder({title:"Save iPhone file to PC"});if(dest.canceled)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination:dest.path},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination:dest.path},"iphone");return}
+  if(cmd==="iphoneFileSave"){const destination=await choosePcFolder("Save iPhone file to PC");if(!destination)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination},"iphone");return}
   if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(!path||!confirm("Delete this item from the iPhone?\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
   if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package/content",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
   if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console},b.dataset.console,true);return}
