@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -529,6 +530,14 @@ class ShellBoundaryTests(unittest.TestCase):
             "window.ttg.showMain()",
         ):
             self.assertIn(token, widget)
+
+    def test_windows_build_uses_insync_specific_icon(self):
+        config = json.loads((ROOT / "techguy-build.json").read_text(encoding="utf-8"))
+        icon_rel = config.get("icons", {}).get("windows", "")
+        self.assertEqual(icon_rel, "app/electron/renderer/assets/insync-app-icon.ico")
+        icon = ROOT / icon_rel
+        self.assertTrue(icon.is_file())
+        self.assertEqual(icon.suffix.lower(), ".ico")
 
     def test_main_restore_reveals_immediately_and_reasserts_after_renderer_reload(self):
         main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")

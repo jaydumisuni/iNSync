@@ -10,7 +10,8 @@
   "entryFile": "app/electron/main.cjs",
   "icon": "app/electron/renderer/assets/insync-logo-transparent.png",
   "icons": {
-    "linux": "app/electron/renderer/assets/insync-logo-transparent.png"
+    "linux": "app/electron/renderer/assets/insync-logo-transparent.png",
+    "windows": "app/electron/renderer/assets/insync-app-icon.ico"
   },
   "description": "Local device and PC bridge for Internet sharing, file transfer, clipboard sync and capability-routed device operations.",
   "output": {
