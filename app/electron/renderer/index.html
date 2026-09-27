@@ -404,7 +404,7 @@ async function refreshEngine(){
 function handleFinished(job){
   updateRemembered(job);const meta=jobs.get(job.id)||{},r=job.result||{};if(job.id===activeJob)setJob(job);
   if(job.status==="completed")toast(r.message||job.message||"Completed");else if(job.status==="cancelled")toast("Cancelled");else toast(r.message||job.error||job.message||"Failed");
-  if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){data.sharing.status=r.status||r;const x=r.status||r;if(x.connection)apply({connection:x.connection})}
+  if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){data.sharing.status=r.status||r;const x=r.status||r;if(x.connection){apply({connection:x.connection});window.ttg.stateSet({connection:x.connection})}}
   if(job.operation==="peer.list"){data.pc.peers=r.peers||[];data.clipboard.peers=r.peers||[];data.files.peers=r.peers||[]}
   if(job.operation==="peer.approve")submit("peer.list",{},currentModule,true);
   if(job.operation==="peer.configure"&&r.peer){data.pc.role=r.peer.role||data.pc.role;data.pc.scope=r.peer.scope||data.pc.scope;data.pc.sharedPaths=r.peer.shared_paths||data.pc.sharedPaths;const c=roleColor(data.pc.role);apply({connection:c});window.ttg.stateSet({connection:c});submit("peer.list",{},null,true)}
@@ -584,7 +584,7 @@ $("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");
 $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#backdrop").classList.remove("open")});
-(async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(apply);apply(state);await refreshEngine()})();
+(async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(next=>{apply(next);if($("#backdrop").classList.contains("open"))renderModule()});apply(state);await refreshEngine()})();
 </script>
 </body>
 </html>

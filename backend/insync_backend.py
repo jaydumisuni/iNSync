@@ -29,7 +29,7 @@ JOBS_LOCK = threading.RLock()
 
 
 def emit(event: str, **data: Any) -> None:
-    payload = json.dumps({"event": event, "data": data}, separators=(",", ":"), ensure_ascii=False)
+    payload = json.dumps({"event": event, "data": data}, separators=(",", ":"), ensure_ascii=True)
     with STDOUT_LOCK:
         sys.stdout.write(payload + "\n")
         sys.stdout.flush()
@@ -37,7 +37,7 @@ def emit(event: str, **data: Any) -> None:
 
 def reply(payload: dict[str, Any]) -> None:
     with STDOUT_LOCK:
-        sys.stdout.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
+        sys.stdout.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=True) + "\n")
         sys.stdout.flush()
 
 

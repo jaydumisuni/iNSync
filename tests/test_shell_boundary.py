@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import re
 import unittest
 from pathlib import Path
 
@@ -530,6 +532,46 @@ class ShellBoundaryTests(unittest.TestCase):
             "window.ttg.showMain()",
         ):
             self.assertIn(token, widget)
+
+    def test_every_rendered_main_command_has_a_handler(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        commands = set(re.findall(r'data-cmd=["\']([^"\']+)', renderer))
+        handlers = set(re.findall(r'cmd===?["\']([^"\']+)', renderer))
+        self.assertTrue(commands)
+        self.assertEqual(sorted(commands - handlers), [])
+
+    def test_every_static_ui_backend_operation_is_registered(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        operations = set(re.findall(r'submit\(["\']([^"\']+)', renderer))
+        registry_block = backend.split("OPERATIONS:", 1)[1].split("def snapshot()", 1)[0]
+        registered = set(re.findall(r'["\']([^"\']+)["\']\s*:', registry_block))
+        self.assertTrue(operations)
+        self.assertEqual(sorted(operations - registered), [])
+
+    def test_backend_jsonl_is_ascii_safe_on_windows_codepages(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        emit = backend.split("def emit(", 1)[1].split("def reply(", 1)[0]
+        reply = backend.split("def reply(", 1)[1].split("def ok(", 1)[0]
+        self.assertIn("ensure_ascii=True", emit)
+        self.assertIn("ensure_ascii=True", reply)
+        self.assertNotIn("ensure_ascii=False", emit)
+        self.assertNotIn("ensure_ascii=False", reply)
+
+    def test_backend_state_changes_are_owned_by_main_process_and_broadcast_to_both_windows(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            "function applyBackendStateEvent(event)",
+            'job.operation==="sharing.status"||job.operation==="sharing.toggle"',
+            'job.operation==="peer.configure"',
+            'job.operation==="peer.approve"',
+            "saveRuntimeState();",
+            "broadcastState();",
+        ):
+            self.assertIn(token, main)
+        self.assertIn('window.ttg.onState(next=>{apply(next);if($("#backdrop").classList.contains("open"))renderModule()})', renderer)
+        self.assertIn('window.ttg.stateSet({connection:x.connection})', renderer)
 
     def test_windows_build_uses_insync_specific_icon(self):
         config = json.loads((ROOT / "techguy-build.json").read_text(encoding="utf-8"))

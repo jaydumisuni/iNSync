@@ -169,12 +169,35 @@ function configureClipboardMonitor({seed=false}={}){
   }
 }
 
-function forwardBackendEvent(event){
+function connectionForPeerRole(role){
+  return role==="provider"?"sending":role==="receiver"?"receiving":"disconnected";
+}
+
+function applyBackendStateEvent(event){
+  let patch=null;
   if(event?.type==="sharing.state"&&event.connection){
-    state={...state,connection:event.connection};
-    saveRuntimeState();
-    broadcastState();
+    patch={connection:event.connection};
+  }else if(event?.type==="peer.state"&&event.peer){
+    patch={connection:connectionForPeerRole(event.peer.role)};
+  }else if(event?.type==="job.finished"&&event.job?.status==="completed"){
+    const job=event.job,result=job.result||{};
+    if(job.operation==="sharing.status"||job.operation==="sharing.toggle"){
+      const sharing=result.status||result;
+      if(sharing?.connection)patch={connection:sharing.connection};
+    }else if(job.operation==="peer.configure"&&result.peer){
+      patch={connection:connectionForPeerRole(result.peer.role)};
+    }else if(job.operation==="peer.approve"&&result.approved===false&&result.peer_id){
+      patch={clipboardTargets:normalizeClipboardTargets(state.clipboardTargets).filter(id=>id!==String(result.peer_id))};
+    }
   }
+  if(!patch)return;
+  state={...state,...patch};
+  saveRuntimeState();
+  broadcastState();
+}
+
+function forwardBackendEvent(event){
+  applyBackendStateEvent(event);
   if(event?.type==="peer.clipboard"&&state.clipboardEnabled&&state.clipboardDirection!=="send"){
     if(event.kind==="text"&&state.clipboardTypes?.text!==false&&typeof event.text==="string"){
       clipboard.writeText(event.text);
