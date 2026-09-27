@@ -15,7 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend" / "insync_backend.py"
 
 
+
+
 class EngineProtocolTests(unittest.TestCase):
+    def test_backend_main_starts_peer_network_before_ready_event(self):
+        source = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        main_block = source.split("def main() -> None:", 1)[1].split('if __name__ == "__main__":', 1)[0]
+        self.assertLess(main_block.index("ensure_peer_network()"), main_block.index('emit("engine.ready"'))
+
     def start_backend(self):
         return subprocess.Popen(
             [sys.executable, str(BACKEND)],

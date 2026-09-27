@@ -3224,6 +3224,7 @@ def direct_dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
+    ensure_peer_network()
     emit("engine.ready", snapshot=snapshot())
     for raw in sys.stdin:
         req: dict[str, Any] | None = None
