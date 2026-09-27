@@ -432,6 +432,7 @@ def _write_sharing_script(enable: bool, public_name: str, private_name: str) -> 
     script_path = state_dir / f"sharing-{token}.ps1"
     result_path = state_dir / f"sharing-{token}.json"
     baseline_path = state_dir / "sharing-baseline.json"
+    uplink_baseline_path = state_dir / "sharing-uplink-baseline.json"
     mode = "$true" if enable else "$false"
     # Native HNetCfg + HomeNet recovery. The UI worker waits; Electron remains responsive.
     script = rf'''$ErrorActionPreference='Stop'
@@ -441,7 +442,23 @@ $privateName={json.dumps(private_name)}
 $scope='192.168.250.1'
 $resultPath={json.dumps(str(result_path))}
 $baselinePath={json.dumps(str(baseline_path))}
+$uplinkBaselinePath={json.dumps(str(uplink_baseline_path))}
 function Save-Result($obj){{$obj|ConvertTo-Json -Compress -Depth 8|Set-Content -LiteralPath $resultPath -Encoding UTF8}}
+function Restore-UplinkMetric($path){{
+  if(-not (Test-Path -LiteralPath $path)){{return}}
+  try{{
+    $u=Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    if($u.publicName){{
+      if([string]$u.automaticMetric -eq 'Enabled'){{
+        Set-NetIPInterface -InterfaceAlias ([string]$u.publicName) -AddressFamily IPv4 -AutomaticMetric Enabled -ErrorAction SilentlyContinue
+      }} else {{
+        Set-NetIPInterface -InterfaceAlias ([string]$u.publicName) -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric ([int]$u.interfaceMetric) -ErrorAction SilentlyContinue
+      }}
+    }}
+  }} finally {{
+    Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+  }}
+}}
 try {{
   $id=[Security.Principal.WindowsIdentity]::GetCurrent()
   $principal=New-Object Security.Principal.WindowsPrincipal($id)
@@ -458,6 +475,19 @@ try {{
   if(-not $connections.ContainsKey($privateName)){{throw "Missing private adapter: $privateName"}}
 
   if($enable){{
+    if(Test-Path -LiteralPath $uplinkBaselinePath){{
+      $existing=Get-Content -Raw -LiteralPath $uplinkBaselinePath | ConvertFrom-Json
+      if([string]$existing.publicName -ne [string]$publicName){{Restore-UplinkMetric $uplinkBaselinePath}}
+    }}
+    if(-not (Test-Path -LiteralPath $uplinkBaselinePath)){{
+      $pubIf=Get-NetIPInterface -InterfaceAlias $publicName -AddressFamily IPv4
+      [pscustomobject]@{{
+        publicName=$publicName
+        automaticMetric=[string]$pubIf.AutomaticMetric
+        interfaceMetric=[int]$pubIf.InterfaceMetric
+      }} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $uplinkBaselinePath -Encoding UTF8
+    }}
+    Set-NetIPInterface -InterfaceAlias $publicName -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 5
     if(-not (Test-Path -LiteralPath $baselinePath)){{
       $if=Get-NetIPInterface -InterfaceAlias $privateName -AddressFamily IPv4
       $ip=Get-NetIPConfiguration -InterfaceAlias $privateName
@@ -513,6 +543,7 @@ try {{
     }}
     foreach($name in $connections.Keys){{try{{$connections[$name].Cfg.DisableSharing()}}catch{{}}}}
     Stop-Service SharedAccess -Force -ErrorAction SilentlyContinue
+    Restore-UplinkMetric $uplinkBaselinePath
     if(Test-Path -LiteralPath $baselinePath){{
       $b=Get-Content -Raw -LiteralPath $baselinePath | ConvertFrom-Json
       Get-NetIPAddress -InterfaceAlias $privateName -AddressFamily IPv4 -ErrorAction SilentlyContinue |

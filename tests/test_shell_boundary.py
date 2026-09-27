@@ -530,6 +530,26 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, widget)
 
+    def test_main_restore_reveals_immediately_and_reasserts_after_renderer_reload(self):
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        block = main.split("function showMain(){", 1)[1].split("function createTray(){", 1)[0]
+        self.assertIn("revealMainWindow(w);", block)
+        self.assertIn('w.webContents.once("did-finish-load"', block)
+        self.assertIn("setTimeout(()=>{if(!w.isDestroyed())revealMainWindow(w)},350)", block)
+        self.assertNotIn('w.once("ready-to-show"', block)
+
+    def test_sharing_selected_uplink_metric_is_authoritative_and_restored(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'sharing-uplink-baseline.json',
+            'Set-NetIPInterface -InterfaceAlias $publicName -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 5',
+            'function Restore-UplinkMetric($path)',
+            'automaticMetric=[string]$pubIf.AutomaticMetric',
+            'interfaceMetric=[int]$pubIf.InterfaceMetric',
+            'Restore-UplinkMetric $uplinkBaselinePath',
+        ):
+            self.assertIn(token, backend)
+
     def test_pc_bound_transfers_restore_main_window_before_destination_dialog(self):
         main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")

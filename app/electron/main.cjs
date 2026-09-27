@@ -334,11 +334,11 @@ async function visibleDialogOwner(){
 
 function showMain(){
   const w=createMain();
-  if(w.webContents.isLoadingMainFrame()){
-    w.once("ready-to-show",()=>revealMainWindow(w));
-    return;
-  }
   revealMainWindow(w);
+  if(w.webContents.isLoadingMainFrame()){
+    w.webContents.once("did-finish-load",()=>{if(!w.isDestroyed())revealMainWindow(w)});
+    setTimeout(()=>{if(!w.isDestroyed())revealMainWindow(w)},350);
+  }
 }
 
 function createTray(){
