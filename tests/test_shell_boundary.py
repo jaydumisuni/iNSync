@@ -555,6 +555,33 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertTrue(operations)
         self.assertEqual(sorted(operations - registered), [])
 
+    def test_iphone_documents_are_scoped_to_house_arrest_documents_root(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'IOS_DOCUMENTS_ROOT = "/Documents"',
+            'docs.dirlist(IOS_DOCUMENTS_ROOT, -1)',
+            'remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name',
+            'raise ValueError("App Documents path is outside /Documents")',
+        ):
+            self.assertIn(token, backend)
+
+    def test_apple_bridge_operations_have_bounded_usb_and_job_timeouts(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            "IOS_USB_SCAN_TIMEOUT = 8.0",
+            "IOS_PAIR_TIMEOUT = 20.0",
+            "asyncio.wait_for(coro, timeout=timeout)",
+            "async def _pmd_usb_ids()",
+            "Apple USB scan timed out",
+            'raise ConnectionError("No iPhone connected")',
+            'return _run_async(_ios_status_pmd(serial), timeout=15)',
+            'calculate_sizes=False',
+            'timeout=30)',
+            'timeout=60)',
+            'timeout=600)',
+        ):
+            self.assertIn(token, backend)
+
     def test_backend_jsonl_is_ascii_safe_on_windows_codepages(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         emit = backend.split("def emit(", 1)[1].split("def reply(", 1)[0]

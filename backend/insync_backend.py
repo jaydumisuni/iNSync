@@ -2586,19 +2586,54 @@ def _pmd_available() -> bool:
         return False
 
 
-def _run_async(coro):
-    return asyncio.run(coro)
+IOS_USB_SCAN_TIMEOUT = 8.0
+IOS_PAIR_TIMEOUT = 20.0
+
+
+def _run_async(coro, *, timeout: float = 30.0):
+    async def bounded():
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(f"Apple device operation timed out after {timeout:g}s") from exc
+
+    return asyncio.run(bounded())
+
+
+async def _pmd_usb_ids() -> list[str]:
+    from pymobiledevice3.usbmux import select_devices_by_connection_type
+
+    try:
+        devices = await asyncio.wait_for(
+            select_devices_by_connection_type(connection_type="USB"),
+            timeout=IOS_USB_SCAN_TIMEOUT,
+        )
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(f"Apple USB scan timed out after {IOS_USB_SCAN_TIMEOUT:g}s") from exc
+    return [str(device.serial) for device in devices]
 
 
 async def _pmd_lockdown(serial: str = ""):
     from pymobiledevice3.lockdown import create_using_usbmux
 
-    return await create_using_usbmux(
-        serial=serial or None,
-        autopair=True,
-        connection_type="USB",
-        pair_timeout=60,
-    )
+    ids = await _pmd_usb_ids()
+    if not ids:
+        raise ConnectionError("No iPhone connected")
+    target = serial or ids[0]
+    if serial and serial not in ids:
+        raise ConnectionError("Selected iPhone is not connected")
+    try:
+        return await asyncio.wait_for(
+            create_using_usbmux(
+                serial=target,
+                autopair=True,
+                connection_type="USB",
+                pair_timeout=int(IOS_PAIR_TIMEOUT),
+            ),
+            timeout=IOS_PAIR_TIMEOUT + 5,
+        )
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(f"Apple pairing timed out after {IOS_PAIR_TIMEOUT:g}s") from exc
 
 
 def _as_int(value: Any) -> int | None:
@@ -2610,10 +2645,8 @@ def _as_int(value: Any) -> int | None:
 
 async def _ios_status_pmd(serial: str = "") -> dict[str, Any]:
     from pymobiledevice3.services.afc import AfcService
-    from pymobiledevice3.usbmux import select_devices_by_connection_type
 
-    devices = await select_devices_by_connection_type(connection_type="USB")
-    ids = [str(device.serial) for device in devices]
+    ids = await _pmd_usb_ids()
     if not ids:
         return ok("0 iOS device(s)", devices=[], available=True)
 
@@ -2649,7 +2682,7 @@ def ios_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     if _pmd_available():
         engine.progress(job, 15, "Reading iPhone status")
         try:
-            return _run_async(_ios_status_pmd(serial))
+            return _run_async(_ios_status_pmd(serial), timeout=15)
         except Exception as exc:
             pmd_error = f"{type(exc).__name__}: {exc}"
         else:
@@ -2705,7 +2738,7 @@ async def _ios_apps_pmd(serial: str = "") -> list[dict[str, Any]]:
     async with await _pmd_lockdown(serial) as lockdown:
         apps = await InstallationProxyService(lockdown=lockdown).get_apps(
             application_type="User",
-            calculate_sizes=True,
+            calculate_sizes=False,
         )
         rows: list[dict[str, Any]] = []
         for bundle_id, info in apps.items():
@@ -2731,7 +2764,7 @@ def ios_apps_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("Installed-app management requires the bundled Apple device bridge", apps=[])
     engine.progress(job, 15, "Reading installed iPhone apps")
     try:
-        apps = _run_async(_ios_apps_pmd(str(job.params.get("serial") or "")))
+        apps = _run_async(_ios_apps_pmd(str(job.params.get("serial") or "")), timeout=30)
         return ok(f"{len(apps)} user app(s)", apps=apps)
     except Exception as exc:
         return unavailable(f"Could not read iPhone apps: {exc}", apps=[])
@@ -2752,7 +2785,7 @@ def ios_app_uninstall_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("App delete requires the bundled Apple device bridge", bundle_id=bundle_id)
     engine.progress(job, 20, f"Deleting {bundle_id}")
     try:
-        _run_async(_ios_app_uninstall_pmd(bundle_id, str(job.params.get("serial") or "")))
+        _run_async(_ios_app_uninstall_pmd(bundle_id, str(job.params.get("serial") or "")), timeout=120)
         return ok("App deleted", bundle_id=bundle_id)
     except Exception as exc:
         return unavailable(f"App delete failed: {exc}", bundle_id=bundle_id)
@@ -2822,7 +2855,7 @@ def ios_media_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("Photo/music browsing requires the bundled Apple device bridge", kind=kind, items=[])
     engine.progress(job, 15, f"Reading iPhone {kind}")
     try:
-        items = _run_async(_ios_media_list_pmd(kind, str(job.params.get("serial") or "")))
+        items = _run_async(_ios_media_list_pmd(kind, str(job.params.get("serial") or "")), timeout=60)
         return ok(f"{len(items)} {kind} item(s)", kind=kind, source="camera-roll" if kind in {"photos", "videos"} else "media-library", items=items)
     except Exception as exc:
         return unavailable(f"Could not list iPhone {kind}: {exc}", kind=kind, items=[])
@@ -2877,7 +2910,7 @@ def ios_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     if kind == "videos":
         engine.progress(job, 18, "Reading iPhone video frame")
         try:
-            raw, err = _run_async(_ios_video_preview_pmd(job, remote_path, str(job.params.get("serial") or "")))
+            raw, err = _run_async(_ios_video_preview_pmd(job, remote_path, str(job.params.get("serial") or "")), timeout=180)
             if not raw:
                 return unavailable(err or "Could not read iPhone video frame", kind=kind, remote_path=remote_path)
             return ok(
@@ -2894,7 +2927,7 @@ def ios_media_preview_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("Preview is unavailable for this iPhone item", kind=kind, remote_path=remote_path)
     engine.progress(job, 18, "Reading iPhone photo preview")
     try:
-        raw = _run_async(_ios_media_preview_pmd(kind, remote_path, str(job.params.get("serial") or "")))
+        raw = _run_async(_ios_media_preview_pmd(kind, remote_path, str(job.params.get("serial") or "")), timeout=90)
         if len(raw) > 8 * 1024 * 1024:
             return unavailable("Photo is too large for an inline preview", kind=kind, remote_path=remote_path)
         return ok(
@@ -2930,7 +2963,7 @@ def ios_media_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("Media export requires the bundled Apple device bridge", kind=kind)
     engine.progress(job, 15, "Sending iPhone item to PC")
     try:
-        target = _run_async(_ios_media_pull_pmd(kind, remote_path, destination, str(job.params.get("serial") or "")))
+        target = _run_async(_ios_media_pull_pmd(kind, remote_path, destination, str(job.params.get("serial") or "")), timeout=600)
         return ok("Saved to PC", kind=kind, local_path=str(target), remote_path=remote_path)
     except Exception as exc:
         return unavailable(f"Could not save iPhone item: {exc}", kind=kind, remote_path=remote_path)
@@ -2960,16 +2993,24 @@ def ios_media_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("Photo delete requires the bundled Apple device bridge", kind=kind)
     engine.progress(job, 20, "Deleting iPhone photo")
     try:
-        _run_async(_ios_media_delete_pmd(kind, remote_path, str(job.params.get("serial") or "")))
+        _run_async(_ios_media_delete_pmd(kind, remote_path, str(job.params.get("serial") or "")), timeout=120)
         return ok("Photo deleted", kind=kind, remote_path=remote_path)
     except Exception as exc:
         return unavailable(f"Photo delete failed: {exc}", kind=kind, remote_path=remote_path)
 
 
+IOS_DOCUMENTS_ROOT = "/Documents"
+
+
 def _ios_document_path(remote_path: str) -> str:
-    value = posixpath.normpath("/" + str(remote_path or "").lstrip("/"))
-    if value.startswith("/../") or value == "/..":
-        raise ValueError("Invalid app Documents path")
+    raw = str(remote_path or "").replace("\\", "/").strip()
+    if raw in {"", "/"}:
+        return IOS_DOCUMENTS_ROOT
+    value = posixpath.normpath("/" + raw.lstrip("/"))
+    if value != IOS_DOCUMENTS_ROOT and not value.startswith(IOS_DOCUMENTS_ROOT + "/"):
+        value = posixpath.normpath(IOS_DOCUMENTS_ROOT + "/" + raw.lstrip("/"))
+    if value != IOS_DOCUMENTS_ROOT and not value.startswith(IOS_DOCUMENTS_ROOT + "/"):
+        raise ValueError("App Documents path is outside /Documents")
     return value
 
 
@@ -2987,7 +3028,7 @@ async def _ios_documents_list_pmd(bundle_id: str, serial: str = "", limit: int =
     rows: list[dict[str, Any]] = []
     async with await _pmd_lockdown(serial) as lockdown:
         async with await _ios_documents_service(lockdown, bundle_id) as docs:
-            async for remote in docs.dirlist("/", -1):
+            async for remote in docs.dirlist(IOS_DOCUMENTS_ROOT, -1):
                 if len(rows) >= limit:
                     break
                 try:
@@ -3014,7 +3055,7 @@ def ios_documents_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id, items=[])
     engine.progress(job, 15, "Reading app Documents")
     try:
-        items = _run_async(_ios_documents_list_pmd(bundle_id, str(job.params.get("serial") or "")))
+        items = _run_async(_ios_documents_list_pmd(bundle_id, str(job.params.get("serial") or "")), timeout=60)
         return ok(f"{len(items)} document item(s)", bundle_id=bundle_id, items=items)
     except Exception as exc:
         return unavailable(f"Could not browse app Documents: {exc}", bundle_id=bundle_id, items=[])
@@ -3041,14 +3082,14 @@ def ios_documents_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
     engine.progress(job, 15, "Saving app document to PC")
     try:
-        target = _run_async(_ios_documents_pull_pmd(bundle_id, remote_path, destination, str(job.params.get("serial") or "")))
+        target = _run_async(_ios_documents_pull_pmd(bundle_id, remote_path, destination, str(job.params.get("serial") or "")), timeout=600)
         return ok("Document saved to PC", bundle_id=bundle_id, local_path=str(target), remote_path=remote_path)
     except Exception as exc:
         return unavailable(f"Could not save app document: {exc}", bundle_id=bundle_id)
 
 
 async def _ios_documents_push_pmd(bundle_id: str, local_path: Path, serial: str = "") -> str:
-    remote = "/" + local_path.name
+    remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name
     async with await _pmd_lockdown(serial) as lockdown:
         async with await _ios_documents_service(lockdown, bundle_id) as docs:
             await docs.push(str(local_path), remote)
@@ -3064,7 +3105,7 @@ def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
     engine.progress(job, 15, "Sending file to app Documents")
     try:
-        remote = _run_async(_ios_documents_push_pmd(bundle_id, local_path, str(job.params.get("serial") or "")))
+        remote = _run_async(_ios_documents_push_pmd(bundle_id, local_path, str(job.params.get("serial") or "")), timeout=600)
         return ok("File sent to app Documents", bundle_id=bundle_id, remote_path=remote, local_path=str(local_path))
     except Exception as exc:
         return unavailable(f"Could not send app document: {exc}", bundle_id=bundle_id)
@@ -3086,7 +3127,7 @@ def ios_documents_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
     engine.progress(job, 20, "Deleting app document")
     try:
-        _run_async(_ios_documents_delete_pmd(bundle_id, remote_path, str(job.params.get("serial") or "")))
+        _run_async(_ios_documents_delete_pmd(bundle_id, remote_path, str(job.params.get("serial") or "")), timeout=120)
         return ok("App document deleted", bundle_id=bundle_id, remote_path=remote_path)
     except Exception as exc:
         return unavailable(f"Could not delete app document: {exc}", bundle_id=bundle_id)
@@ -3111,7 +3152,7 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     if _pmd_available():
         engine.progress(job, 20, "Installing IPA through Apple device bridge")
         try:
-            _run_async(_ios_ipa_install_pmd(path, str(job.params.get("serial") or "")))
+            _run_async(_ios_ipa_install_pmd(path, str(job.params.get("serial") or "")), timeout=600)
             return ok("IPA installed", path=str(path), metadata=metadata, backend="pymobiledevice3")
         except Exception as exc:
             return unavailable(f"IPA install failed: {exc}", path=str(path), metadata=metadata)
