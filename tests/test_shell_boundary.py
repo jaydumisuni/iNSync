@@ -533,6 +533,12 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, widget)
 
+    def test_android_and_apk_app_rows_expose_green_get_beside_delete(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('.get{border:1px solid rgba(57,255,145,.28)', renderer)
+        self.assertGreaterEqual(renderer.count('class="get mini" data-cmd="appGet"'), 2)
+        self.assertIn('submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},currentModule==="android"?"android":"apk")', renderer)
+
     def test_every_rendered_main_command_has_a_handler(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         commands = set(re.findall(r'data-cmd=["\']([^"\']+)', renderer))
