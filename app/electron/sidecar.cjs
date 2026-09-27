@@ -11,6 +11,7 @@ class SidecarBridge{
     this.child=null;
     this.pending=new Map();
     this.nextId=1;
+    this.invokeTimeoutMs=Math.max(3000,Number(this.manifest.invokeTimeoutMs||15000));
   }
   _profile(){
     if(this.app.isPackaged&&this.manifest.packaged)return this.manifest.packaged;
@@ -32,19 +33,23 @@ class SidecarBridge{
     const profile=this._profile();
     const exe=this._resolve(profile);
     const args=Array.isArray(profile.args)?profile.args:[];
-    this.child=spawn(exe,args,{
+    const child=spawn(exe,args,{
       cwd:profile.cwd?path.resolve(this.app.isPackaged?process.resourcesPath:__dirname,profile.cwd):path.dirname(exe),
       shell:false,
       windowsHide:true,
       stdio:["pipe","pipe","pipe"],
       env:{...process.env,...(profile.env||{}),TTG_UI_RUNTIME:"electron",PYTHONIOENCODING:"utf-8",PYTHONUTF8:"1"}
     });
-    readline.createInterface({input:this.child.stdout}).on("line",line=>this._line(line));
-    this.child.stderr?.on("data",chunk=>{if(!this.app.isPackaged)process.stderr.write(chunk)});
-    this.child.on("exit",(code)=>{
-      for(const q of this.pending.values())q.reject(new Error("backend exited"));
-      this.pending.clear();
-      this.child=null;
+    this.child=child;
+    readline.createInterface({input:child.stdout}).on("line",line=>this._line(line));
+    child.stderr?.on("data",chunk=>{if(!this.app.isPackaged)process.stderr.write(chunk)});
+    child.on("exit",(code)=>{
+      for(const [id,q] of [...this.pending]){
+        if(q.child!==child)continue;
+        this.pending.delete(id);
+        q.reject(new Error("backend exited"));
+      }
+      if(this.child===child)this.child=null;
       this.onEvent({type:"engine.exit",code});
     });
   }
@@ -65,13 +70,43 @@ class SidecarBridge{
     await this.start();
     if(!this.child?.stdin?.writable)throw new Error("backend unavailable");
     const id=this.nextId++;
+    const child=this.child;
     return new Promise((resolve,reject)=>{
-      this.pending.set(id,{resolve,reject});
-      this.child.stdin.write(JSON.stringify({id,method,params})+"\n");
+      let settled=false;
+      let timer=null;
+      const finish=(fn,value)=>{
+        if(settled)return;
+        settled=true;
+        if(timer)clearTimeout(timer);
+        this.pending.delete(id);
+        fn(value);
+      };
+      timer=setTimeout(()=>{
+        if(settled)return;
+        finish(reject,new Error("backend timeout: "+method));
+        if(this.child===child){
+          this.child=null;
+          try{child.kill()}catch{}
+        }
+      },this.invokeTimeoutMs);
+      this.pending.set(id,{
+        child,
+        resolve:value=>finish(resolve,value),
+        reject:error=>finish(reject,error),
+      });
+      child.stdin.write(JSON.stringify({id,method,params})+"\n",error=>{
+        if(error)finish(reject,error);
+      });
     });
   }
   stop(){
-    if(this.child){this.child.kill();this.child=null}
+    const child=this.child;
+    this.child=null;
+    if(child)try{child.kill()}catch{}
+    for(const [id,q] of [...this.pending]){
+      this.pending.delete(id);
+      q.reject(new Error("backend stopped"));
+    }
   }
 }
 module.exports={SidecarBridge};

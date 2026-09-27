@@ -45,6 +45,16 @@ function prefs(){
 function harden(win){
   win.webContents.setWindowOpenHandler(()=>({action:"deny"}));
   win.webContents.on("will-navigate",(e,url)=>{if(!url.startsWith("file:"))e.preventDefault()});
+  let recoveryTimer=null;
+  win.on("unresponsive",()=>{
+    clearTimeout(recoveryTimer);
+    recoveryTimer=setTimeout(()=>{if(!win.isDestroyed())win.webContents.reloadIgnoringCache()},1500);
+  });
+  win.on("responsive",()=>{clearTimeout(recoveryTimer);recoveryTimer=null});
+  win.webContents.on("render-process-gone",(_event,details)=>{
+    if(details?.reason==="clean-exit"||win.isDestroyed())return;
+    setTimeout(()=>{if(!win.isDestroyed())win.webContents.reloadIgnoringCache()},250);
+  });
 }
 
 function runtimeStatePath(){

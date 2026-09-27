@@ -530,6 +530,24 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, widget)
 
+    def test_backend_timeout_and_renderer_recovery_prevent_indefinite_freeze(self):
+        sidecar = (ROOT / "app" / "electron" / "sidecar.cjs").read_text(encoding="utf-8")
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        for token in (
+            "this.invokeTimeoutMs=Math.max(3000,Number(this.manifest.invokeTimeoutMs||15000))",
+            'new Error("backend timeout: "+method)',
+            "this.pending.delete(id)",
+            "try{child.kill()}catch{}",
+            'new Error("backend stopped")',
+        ):
+            self.assertIn(token, sidecar)
+        for token in (
+            'win.on("unresponsive"',
+            'win.on("responsive"',
+            'win.webContents.on("render-process-gone"',
+            "win.webContents.reloadIgnoringCache()",
+        ):
+            self.assertIn(token, main)
     def test_system_tray_uses_insync_icon_and_restores_main_window(self):
         main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
         for token in (
