@@ -81,9 +81,11 @@ def adb_path() -> str | None:
     override = os.environ.get("INSYNC_ADB_PATH", "").strip()
     if override and Path(override).is_file():
         return override
-    # Preserve the ecosystem's existing 5037 server for USB/classic ADB when
-    # one is installed. Modern Wireless Debugging is isolated on 5041.
-    return shutil.which("adb") or adb_modern_path()
+    # Use the bundled v41 client for classic USB ADB when available. The client
+    # attaches to the ecosystem-owned server on 5037; it does not take server
+    # ownership. PATH is fallback only because stale v40 adb.exe copies can
+    # otherwise kill/restart a healthy v41 server during a version mismatch.
+    return _bundled_adb_path() or shutil.which("adb")
 
 
 def ffmpeg_path() -> str | None:

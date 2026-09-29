@@ -390,7 +390,7 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn("Android 11+ Pairing", renderer)
         self.assertIn("Pair device with pairing code", renderer)
         self.assertIn('ADB_MODERN_SERVER_PORT = int(os.environ.get("INSYNC_ADB_MODERN_PORT", "5041"))', backend)
-        self.assertIn('return shutil.which("adb") or adb_modern_path()', backend)
+        self.assertIn('return _bundled_adb_path() or shutil.which("adb")', backend)
 
 
     def test_renderer_refreshes_backend_capabilities_on_start_and_module_open(self):
@@ -564,6 +564,13 @@ class ShellBoundaryTests(unittest.TestCase):
             'raise ValueError("App Documents path is outside /Documents")',
         ):
             self.assertIn(token, backend)
+
+    def test_classic_adb_prefers_bundled_v41_client_over_path_fallback(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        block = backend.split("def adb_path()", 1)[1].split("def ffmpeg_path()", 1)[0]
+        self.assertIn('return _bundled_adb_path() or shutil.which("adb")', block)
+        self.assertNotIn('return shutil.which("adb") or adb_modern_path()', block)
+        self.assertIn("ecosystem-owned server on 5037", block)
 
     def test_apple_bridge_operations_have_bounded_usb_and_job_timeouts(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
