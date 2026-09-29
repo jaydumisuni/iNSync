@@ -3090,25 +3090,53 @@ def ios_documents_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable(f"Could not save app document: {exc}", bundle_id=bundle_id)
 
 
-async def _ios_documents_push_pmd(bundle_id: str, local_path: Path, serial: str = "") -> str:
-    remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name
+async def _ios_documents_push_pmd(bundle_id: str, local_paths: list[Path], serial: str = "") -> list[dict[str, Any]]:
+    uploaded: list[dict[str, Any]] = []
     async with await _pmd_lockdown(serial) as lockdown:
         async with await _ios_documents_service(lockdown, bundle_id) as docs:
-            await docs.push(str(local_path), remote)
-    return remote
+            for local_path in local_paths:
+                remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name
+                await docs.push(str(local_path), remote, progress_bar=False)
+                uploaded.append({
+                    "name": local_path.name,
+                    "local_path": str(local_path),
+                    "remote_path": remote,
+                    "size": local_path.stat().st_size,
+                })
+    return uploaded
 
 
 def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     bundle_id = str(job.params.get("bundle_id") or "").strip()
-    local_path = Path(str(job.params.get("local_path") or ""))
-    if not bundle_id or not local_path.is_file():
-        return unavailable("Choose an app and local file before sending")
+    raw_paths = job.params.get("local_paths")
+    if isinstance(raw_paths, list):
+        local_paths = [Path(str(value)) for value in raw_paths if str(value or "").strip()]
+    else:
+        legacy = str(job.params.get("local_path") or "").strip()
+        local_paths = [Path(legacy)] if legacy else []
+    if not bundle_id or not local_paths:
+        return unavailable("Choose an app and one or more local files before sending")
+    missing = [str(path) for path in local_paths if not path.is_file()]
+    if missing:
+        return unavailable("One or more selected files are unavailable", bundle_id=bundle_id, missing=missing)
     if not _pmd_available():
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
-    engine.progress(job, 15, "Sending file to app Documents")
+    engine.progress(job, 15, f"Sending {len(local_paths)} file(s) to app Documents")
     try:
-        remote = _run_async(_ios_documents_push_pmd(bundle_id, local_path, str(job.params.get("serial") or "")), timeout=600)
-        return ok("File sent to app Documents", bundle_id=bundle_id, remote_path=remote, local_path=str(local_path))
+        timeout = max(600, 600 * len(local_paths))
+        uploaded = _run_async(
+            _ios_documents_push_pmd(bundle_id, local_paths, str(job.params.get("serial") or "")),
+            timeout=timeout,
+        )
+        result = {
+            "bundle_id": bundle_id,
+            "items": uploaded,
+            "count": len(uploaded),
+        }
+        if len(uploaded) == 1:
+            result["remote_path"] = uploaded[0]["remote_path"]
+            result["local_path"] = uploaded[0]["local_path"]
+        return ok(f"{len(uploaded)} file(s) sent to app Documents", **result)
     except Exception as exc:
         return unavailable(f"Could not send app document: {exc}", bundle_id=bundle_id)
 

@@ -555,6 +555,25 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertTrue(operations)
         self.assertEqual(sorted(operations - registered), [])
 
+    def test_iphone_documents_send_supports_multiple_files_and_refreshes_selected_app(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'title:"Send files to app Documents",multi:true',
+            'local_paths:r.paths',
+            'job.operation==="ios.documents.push"&&r.bundle_id',
+            'submit("ios.documents.list",{bundle_id:r.bundle_id},"iphone",true)',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            'async def _ios_documents_push_pmd(bundle_id: str, local_paths: list[Path]',
+            'for local_path in local_paths:',
+            'progress_bar=False',
+            'raw_paths = job.params.get("local_paths")',
+            '"items": uploaded',
+        ):
+            self.assertIn(token, backend)
+
     def test_iphone_documents_are_scoped_to_house_arrest_documents_root(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         for token in (

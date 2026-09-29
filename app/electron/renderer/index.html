@@ -248,7 +248,7 @@ const modules={
         const appOptions=d.apps.map(app=>'<option value="'+esc(app.bundle_id)+'" '+(app.bundle_id===d.bundleId?"selected":"")+'>'+esc(app.name||app.bundle_id)+'</option>').join("");
         const docs=d.documents.filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
         body=listSearch+'<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="media-list '+d.view+'">'+(docs.length?docs.map(item=>iphoneFileRow(item,true)).join(""):'<div class="empty-state">Choose an app, then refresh its Documents.</div>')+'</div>';
-        actions='<button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send file</button>';
+        actions='<button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send files</button>';
       }else{
         const list=(d.media[section]||[]).filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
         body=listSearch+'<div class="media-list '+d.view+'">'+(list.length?list.map(item=>iphoneFileRow(item,section==="photos"||section==="videos")).join(""):'<div class="empty-state">Refresh '+section+' to list device content.</div>')+'</div>';
@@ -440,6 +440,7 @@ function handleFinished(job){
   if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id}
   if(job.operation==="ios.app.uninstall")submit("ios.apps",{},"iphone",true);
   if(job.operation==="ios.media.delete"&&r.kind)submit("ios.media.list",{kind:r.kind},"iphone",true);
+  if(job.operation==="ios.documents.push"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;submit("ios.documents.list",{bundle_id:r.bundle_id},"iphone",true);}
   if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if(job.operation==="console.pkg"&&meta.context&&data[meta.context])data[meta.context].status=r;
@@ -567,7 +568,7 @@ async function command(cmd,b){
   if(cmd==="iphoneAppDelete"){const bundle=b.dataset.bundle||"";if(bundle&&confirm("Delete this app from the iPhone?\n\n"+bundle))submit("ios.app.uninstall",{bundle_id:bundle},"iphone");return}
   if(cmd==="iphoneDocuments"){data.iphone.bundleId=b.dataset.bundle||"";data.iphone.section="documents";renderModule();if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
   if(cmd==="iphoneDocsRefresh"){if(!data.iphone.bundleId){toast("Choose an app first");return}submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
-  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send file to app Documents",multi:false});if(!r.canceled)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_path:r.paths[0]},"iphone");return}
+  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send files to app Documents",multi:true});if(!r.canceled&&r.paths?.length)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_paths:r.paths},"iphone");return}
   if(cmd==="iphoneMediaRefresh"){submit("ios.media.list",{kind:b.dataset.kind||data.iphone.section},"iphone",true);return}
   if(cmd==="iphoneFileSave"){const destination=await choosePcFolder("Save iPhone file to PC");if(!destination)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination},"iphone");return}
   if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(!path||!confirm("Delete this item from the iPhone?\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
