@@ -3026,41 +3026,71 @@ async def _ios_documents_service(lockdown, bundle_id: str):
     )
 
 
-async def _ios_documents_list_pmd(bundle_id: str, serial: str = "", limit: int = 240) -> list[dict[str, Any]]:
+async def _ios_documents_list_pmd(
+    bundle_id: str,
+    directory: str = IOS_DOCUMENTS_ROOT,
+    serial: str = "",
+    limit: int = 240,
+) -> tuple[str, list[dict[str, Any]]]:
+    current = _ios_document_path(directory)
     rows: list[dict[str, Any]] = []
     async with await _pmd_lockdown(serial) as lockdown:
         async with await _ios_documents_service(lockdown, bundle_id) as docs:
-            async for remote in docs.dirlist(IOS_DOCUMENTS_ROOT, -1):
+            if not await docs.isdir(current):
+                raise ValueError("Selected app Documents path is not a folder")
+            for name in await docs.listdir(current):
                 if len(rows) >= limit:
                     break
+                remote = posixpath.join(current, name)
                 try:
                     info = await docs.stat(remote)
                 except Exception:
                     continue
-                if info.get("st_ifmt") != "S_IFREG":
+                entry_type = info.get("st_ifmt")
+                if entry_type not in {"S_IFREG", "S_IFDIR"}:
                     continue
+                is_dir = entry_type == "S_IFDIR"
                 rows.append({
                     "kind": "documents",
                     "bundle_id": bundle_id,
                     "path": str(remote),
-                    "name": posixpath.basename(str(remote)),
-                    "size": int(info.get("st_size") or 0),
+                    "name": str(name),
+                    "size": 0 if is_dir else int(info.get("st_size") or 0),
+                    "is_dir": is_dir,
+                    "entry_type": "folder" if is_dir else "file",
                 })
-    return sorted(rows, key=lambda item: str(item["path"]).casefold())
+    rows.sort(key=lambda item: (not bool(item.get("is_dir")), str(item.get("name") or "").casefold()))
+    return current, rows
 
 
 def ios_documents_list_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     bundle_id = str(job.params.get("bundle_id") or "").strip()
+    current_path = str(job.params.get("path") or IOS_DOCUMENTS_ROOT)
     if not bundle_id:
-        return unavailable("Choose an app before browsing Documents", bundle_id=bundle_id, items=[])
+        return unavailable("Choose an app before browsing Documents", bundle_id=bundle_id, path=IOS_DOCUMENTS_ROOT, items=[])
     if not _pmd_available():
-        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id, items=[])
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id, path=IOS_DOCUMENTS_ROOT, items=[])
     engine.progress(job, 15, "Reading app Documents")
     try:
-        items = _run_async(_ios_documents_list_pmd(bundle_id, str(job.params.get("serial") or "")), timeout=60)
-        return ok(f"{len(items)} document item(s)", bundle_id=bundle_id, items=items)
+        current, items = _run_async(
+            _ios_documents_list_pmd(bundle_id, current_path, str(job.params.get("serial") or "")),
+            timeout=60,
+        )
+        parent = IOS_DOCUMENTS_ROOT if current == IOS_DOCUMENTS_ROOT else _ios_document_path(posixpath.dirname(current))
+        return ok(
+            f"{len(items)} item(s) in {current}",
+            bundle_id=bundle_id,
+            path=current,
+            parent_path=parent,
+            items=items,
+        )
     except Exception as exc:
-        return unavailable(f"Could not browse app Documents: {exc}", bundle_id=bundle_id, items=[])
+        return unavailable(
+            f"Could not browse app Documents: {exc}",
+            bundle_id=bundle_id,
+            path=_ios_document_path(current_path),
+            items=[],
+        )
 
 
 async def _ios_documents_pull_pmd(bundle_id: str, remote_path: str, destination: Path, serial: str = "") -> Path:
@@ -3090,12 +3120,20 @@ def ios_documents_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable(f"Could not save app document: {exc}", bundle_id=bundle_id)
 
 
-async def _ios_documents_push_pmd(bundle_id: str, local_paths: list[Path], serial: str = "") -> list[dict[str, Any]]:
+async def _ios_documents_push_pmd(
+    bundle_id: str,
+    local_paths: list[Path],
+    destination_path: str = IOS_DOCUMENTS_ROOT,
+    serial: str = "",
+) -> tuple[str, list[dict[str, Any]]]:
+    destination = _ios_document_path(destination_path)
     uploaded: list[dict[str, Any]] = []
     async with await _pmd_lockdown(serial) as lockdown:
         async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            if not await docs.isdir(destination):
+                raise ValueError("Selected app destination is not a folder")
             for local_path in local_paths:
-                remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name
+                remote = posixpath.join(destination, local_path.name)
                 await docs.push(str(local_path), remote, progress_bar=False)
                 uploaded.append({
                     "name": local_path.name,
@@ -3103,7 +3141,7 @@ async def _ios_documents_push_pmd(bundle_id: str, local_paths: list[Path], seria
                     "remote_path": remote,
                     "size": local_path.stat().st_size,
                 })
-    return uploaded
+    return destination, uploaded
 
 
 def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -3121,15 +3159,22 @@ def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return unavailable("One or more selected files are unavailable", bundle_id=bundle_id, missing=missing)
     if not _pmd_available():
         return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
-    engine.progress(job, 15, f"Sending {len(local_paths)} file(s) to app Documents")
+    destination_path = str(job.params.get("destination_path") or IOS_DOCUMENTS_ROOT)
+    engine.progress(job, 15, f"Sending {len(local_paths)} file(s) to {destination_path}")
     try:
         timeout = max(600, 600 * len(local_paths))
-        uploaded = _run_async(
-            _ios_documents_push_pmd(bundle_id, local_paths, str(job.params.get("serial") or "")),
+        destination, uploaded = _run_async(
+            _ios_documents_push_pmd(
+                bundle_id,
+                local_paths,
+                destination_path,
+                str(job.params.get("serial") or ""),
+            ),
             timeout=timeout,
         )
         result = {
             "bundle_id": bundle_id,
+            "destination_path": destination,
             "items": uploaded,
             "count": len(uploaded),
         }
@@ -3139,6 +3184,50 @@ def ios_documents_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         return ok(f"{len(uploaded)} file(s) sent to app Documents", **result)
     except Exception as exc:
         return unavailable(f"Could not send app document: {exc}", bundle_id=bundle_id)
+
+
+async def _ios_documents_mkdir_pmd(
+    bundle_id: str,
+    parent_path: str,
+    name: str,
+    serial: str = "",
+) -> str:
+    parent = _ios_document_path(parent_path)
+    folder_name = str(name or "").strip()
+    if not folder_name or folder_name in {".", ".."} or "/" in folder_name or "\\" in folder_name:
+        raise ValueError("Folder name must be a single valid name")
+    remote = _ios_document_path(posixpath.join(parent, folder_name))
+    async with await _pmd_lockdown(serial) as lockdown:
+        async with await _ios_documents_service(lockdown, bundle_id) as docs:
+            if not await docs.isdir(parent):
+                raise ValueError("Selected parent is not a folder")
+            await docs.makedirs(remote)
+    return remote
+
+
+def ios_documents_mkdir_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    bundle_id = str(job.params.get("bundle_id") or "").strip()
+    parent_path = str(job.params.get("path") or IOS_DOCUMENTS_ROOT)
+    name = str(job.params.get("name") or "").strip()
+    if not bundle_id or not name:
+        return unavailable("Choose an app and enter a folder name")
+    if not _pmd_available():
+        return unavailable("App Documents require the bundled Apple device bridge", bundle_id=bundle_id)
+    engine.progress(job, 20, "Creating app Documents folder")
+    try:
+        remote = _run_async(
+            _ios_documents_mkdir_pmd(bundle_id, parent_path, name, str(job.params.get("serial") or "")),
+            timeout=120,
+        )
+        return ok(
+            "Folder created",
+            bundle_id=bundle_id,
+            path=remote,
+            parent_path=_ios_document_path(parent_path),
+            name=posixpath.basename(remote),
+        )
+    except Exception as exc:
+        return unavailable(f"Could not create app Documents folder: {exc}", bundle_id=bundle_id)
 
 
 async def _ios_documents_delete_pmd(bundle_id: str, remote_path: str, serial: str = "") -> None:
@@ -3262,6 +3351,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "ios.documents.list": ios_documents_list_job,
     "ios.documents.pull": ios_documents_pull_job,
     "ios.documents.push": ios_documents_push_job,
+    "ios.documents.mkdir": ios_documents_mkdir_job,
     "ios.documents.delete": ios_documents_delete_job,
     "console.status": console_status_job,
     "console.pkg": console_pkg_job,

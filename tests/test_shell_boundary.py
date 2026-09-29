@@ -555,18 +555,43 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertTrue(operations)
         self.assertEqual(sorted(operations - registered), [])
 
+    def test_iphone_documents_support_folder_navigation_destination_and_creation(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'docPath:"/Documents"',
+            'data-cmd="iphoneDocOpen"',
+            'data-cmd="iphoneDocUp"',
+            'data-cmd="iphoneDocNewFolder"',
+            'Send files here',
+            'destination_path:data.iphone.docPath',
+            'path:data.iphone.docPath',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            'for name in await docs.listdir(current):',
+            '"is_dir": is_dir',
+            '"entry_type": "folder" if is_dir else "file"',
+            'destination = _ios_document_path(destination_path)',
+            'async def _ios_documents_mkdir_pmd(',
+            '"ios.documents.mkdir": ios_documents_mkdir_job',
+        ):
+            self.assertIn(token, backend)
+
     def test_iphone_documents_send_supports_multiple_files_and_refreshes_selected_app(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         for token in (
-            'title:"Send files to app Documents",multi:true',
+            'title:"Send files to "+data.iphone.docPath,multi:true',
             'local_paths:r.paths',
+            'destination_path:data.iphone.docPath',
             'job.operation==="ios.documents.push"&&r.bundle_id',
-            'submit("ios.documents.list",{bundle_id:r.bundle_id},"iphone",true)',
+            'submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true)',
         ):
             self.assertIn(token, renderer)
         for token in (
-            'async def _ios_documents_push_pmd(bundle_id: str, local_paths: list[Path]',
+            'async def _ios_documents_push_pmd(',
+            'destination_path: str = IOS_DOCUMENTS_ROOT',
             'for local_path in local_paths:',
             'progress_bar=False',
             'raw_paths = job.params.get("local_paths")',
@@ -578,8 +603,8 @@ class ShellBoundaryTests(unittest.TestCase):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         for token in (
             'IOS_DOCUMENTS_ROOT = "/Documents"',
-            'docs.dirlist(IOS_DOCUMENTS_ROOT, -1)',
-            'remote = IOS_DOCUMENTS_ROOT + "/" + local_path.name',
+            'for name in await docs.listdir(current):',
+            'destination = _ios_document_path(destination_path)',
             'raise ValueError("App Documents path is outside /Documents")',
         ):
             self.assertIn(token, backend)

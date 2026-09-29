@@ -97,7 +97,7 @@ const data={
   android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{},appIcons:{},search:{}},
   apk:{paths:[],section:"install",appFilter:"all",appSearch:"",wifi:{status:null,endpoint:"",pairEndpoint:"",pairCode:"",services:[]}},
   ipa:{path:"",validation:null,status:null},
-  iphone:{status:null,section:"photos",view:"list",media:{photos:[],videos:[],music:[]},apps:[],documents:[],bundleId:"",page:0,previews:{},search:{}},
+  iphone:{status:null,section:"photos",view:"list",media:{photos:[],videos:[],music:[]},apps:[],documents:[],bundleId:"",docPath:"/Documents",page:0,previews:{},search:{}},
   playstation:{paths:[],status:null},
   xbox:{paths:[],status:null},
   switch:{paths:[],status:null}
@@ -247,8 +247,9 @@ const modules={
       }else if(section==="documents"){
         const appOptions=d.apps.map(app=>'<option value="'+esc(app.bundle_id)+'" '+(app.bundle_id===d.bundleId?"selected":"")+'>'+esc(app.name||app.bundle_id)+'</option>').join("");
         const docs=d.documents.filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
-        body=listSearch+'<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="media-list '+d.view+'">'+(docs.length?docs.map(item=>iphoneFileRow(item,true)).join(""):'<div class="empty-state">Choose an app, then refresh its Documents.</div>')+'</div>';
-        actions='<button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send files</button>';
+        const atRoot=(d.docPath||"/Documents")==="/Documents";
+        body=listSearch+'<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="share-path"><b>Destination:</b> '+esc(d.docPath||"/Documents")+'</div><div class="media-list '+d.view+'">'+(docs.length?docs.map(item=>iphoneDocumentRow(item)).join(""):'<div class="empty-state">This folder is empty.</div>')+'</div>';
+        actions='<button class="secondary" data-cmd="iphoneDocUp" '+(atRoot?"disabled":"")+'>Up</button><button class="secondary" data-cmd="iphoneDocNewFolder">New folder</button><button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send files here</button>';
       }else{
         const list=(d.media[section]||[]).filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
         body=listSearch+'<div class="media-list '+d.view+'">'+(list.length?list.map(item=>iphoneFileRow(item,section==="photos"||section==="videos")).join(""):'<div class="empty-state">Refresh '+section+' to list device content.</div>')+'</div>';
@@ -281,6 +282,12 @@ function iphoneFileRow(item,allowDelete){
   const kind=item.kind||data.iphone.section;
   const preview=kind==="photos"?previewFor(data.iphone.previews,{...item,kind},"iphone"):previewFor({}, {...item,kind},"");
   return '<div class="media-row" data-kind="'+esc(kind)+'"><div class="media-row-main">'+preview+'<div class="media-copy"><b>'+esc(name)+'</b><span>'+esc(meta)+'</span></div></div><div class="media-actions"><button class="secondary mini" data-cmd="iphoneFileSave" data-kind="'+esc(kind)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Send to PC</button>'+(allowDelete?'<button class="danger mini" data-cmd="iphoneFileDelete" data-kind="'+esc(kind)+'" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'">Delete</button>':'')+'</div></div>';
+}
+function iphoneDocumentRow(item){
+  if(item.is_dir){
+    return '<div class="media-row" data-kind="documents" data-entry="folder"><div class="media-row-main"><div class="media-copy"><b>'+esc(item.name||"Folder")+'</b><span>Folder | '+esc(item.path||"")+'</span></div></div><div class="media-actions"><button class="primary mini" data-cmd="iphoneDocOpen" data-path="'+esc(item.path||"")+'">Open</button><button class="danger mini" data-cmd="iphoneFileDelete" data-kind="documents" data-path="'+esc(item.path||"")+'" data-bundle="'+esc(item.bundle_id||data.iphone.bundleId||"")+'" data-folder="true">Delete</button></div></div>';
+  }
+  return iphoneFileRow(item,true);
 }
 function optionList(items,valueFn,labelFn,selected){return items.map(x=>{const v=valueFn(x),l=labelFn(x);return '<option value="'+esc(v)+'" '+(v===selected?'selected':'')+'>'+esc(l)+'</option>'}).join('')}
 function lumiCombo(id,label,options,type){
@@ -437,11 +444,12 @@ function handleFinished(job){
   if(job.operation==="ios.apps")data.iphone.apps=r.apps||[];
   if(job.operation==="ios.media.list"&&r.kind)data.iphone.media[r.kind]=r.items||[];
   if(job.operation==="ios.media.preview"&&r.remote_path){data.iphone.previews[r.remote_path]=r.data_url||"";previewPending.delete("iphone:"+r.remote_path)}
-  if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id}
+  if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id;if(r.path)data.iphone.docPath=r.path}
   if(job.operation==="ios.app.uninstall")submit("ios.apps",{},"iphone",true);
   if(job.operation==="ios.media.delete"&&r.kind)submit("ios.media.list",{kind:r.kind},"iphone",true);
-  if(job.operation==="ios.documents.push"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;submit("ios.documents.list",{bundle_id:r.bundle_id},"iphone",true);}
-  if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);
+  if(job.operation==="ios.documents.push"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.destination_path)data.iphone.docPath=r.destination_path;submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
+  if(job.operation==="ios.documents.mkdir"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.parent_path)data.iphone.docPath=r.parent_path;submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
+  if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if(job.operation==="console.pkg"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if($("#backdrop").classList.contains("open"))renderModule();
@@ -455,7 +463,7 @@ window.ttg.onBackendEvent(evt=>{
 });
 
 function wireControls(){
-  const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)};
+  const docApp=$("#iphoneDocApp");if(docApp)docApp.onchange=e=>{data.iphone.bundleId=e.target.value;data.iphone.docPath="/Documents";data.iphone.documents=[];if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true)};
   const androidListSearch=$("#androidListSearch");if(androidListSearch)androidListSearch.oninput=e=>{const section=data.android.section||"photos";data.android.search[section]=e.target.value;const q=e.target.value.trim().toLowerCase();$$(".android-content .app-row,.android-content .media-row").forEach(row=>row.style.display=(!q||row.textContent.toLowerCase().includes(q))?"":"none")};
   const iphoneListSearch=$("#iphoneListSearch");if(iphoneListSearch)iphoneListSearch.oninput=e=>{const section=data.iphone.section||"photos";data.iphone.search[section]=e.target.value;const q=e.target.value.trim().toLowerCase();$$("#moduleContent .media-list .media-row").forEach(row=>row.style.display=(!q||row.textContent.toLowerCase().includes(q))?"":"none")};
   const apkSearch=$("#apkAppSearch");if(apkSearch)apkSearch.oninput=e=>{data.apk.appSearch=e.target.value;const q=data.apk.appSearch.trim().toLowerCase(),filter=data.apk.appFilter||"all";$$(".app-row").forEach(row=>{const pkg=(row.querySelector("b")?.textContent||"").toLowerCase(),kind=(row.querySelector("span")?.textContent||"").toLowerCase();row.style.display=((filter==="all"||kind===filter)&&(!q||pkg.includes(q)))?"":"none"})};
@@ -562,16 +570,19 @@ async function command(cmd,b){
   if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
   if(cmd==="ipaStatus"){submit("ios.status",{},"ipa",true);return}
   if(cmd==="iosStatus"){submit("ios.status",{},"iphone",true);return}
-  if(cmd==="iphoneSection"){data.iphone.section=b.dataset.section||"photos";renderModule();if(data.iphone.section==="apps")submit("ios.apps",{},"iphone",true);else if(data.iphone.section==="documents"){if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true)}else submit("ios.media.list",{kind:data.iphone.section},"iphone",true);return}
+  if(cmd==="iphoneSection"){data.iphone.section=b.dataset.section||"photos";renderModule();if(data.iphone.section==="apps")submit("ios.apps",{},"iphone",true);else if(data.iphone.section==="documents"){if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true)}else submit("ios.media.list",{kind:data.iphone.section},"iphone",true);return}
   if(cmd==="iphoneView"){data.iphone.view=b.dataset.view==="large"?"large":"list";renderModule();return}
   if(cmd==="iphoneAppsRefresh"){submit("ios.apps",{},"iphone",true);return}
   if(cmd==="iphoneAppDelete"){const bundle=b.dataset.bundle||"";if(bundle&&confirm("Delete this app from the iPhone?\n\n"+bundle))submit("ios.app.uninstall",{bundle_id:bundle},"iphone");return}
-  if(cmd==="iphoneDocuments"){data.iphone.bundleId=b.dataset.bundle||"";data.iphone.section="documents";renderModule();if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
-  if(cmd==="iphoneDocsRefresh"){if(!data.iphone.bundleId){toast("Choose an app first");return}submit("ios.documents.list",{bundle_id:data.iphone.bundleId},"iphone",true);return}
-  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send files to app Documents",multi:true});if(!r.canceled&&r.paths?.length)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_paths:r.paths},"iphone");return}
+  if(cmd==="iphoneDocuments"){data.iphone.bundleId=b.dataset.bundle||"";data.iphone.docPath="/Documents";data.iphone.section="documents";renderModule();if(data.iphone.bundleId)submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
+  if(cmd==="iphoneDocsRefresh"){if(!data.iphone.bundleId){toast("Choose an app first");return}submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
+  if(cmd==="iphoneDocOpen"){if(!data.iphone.bundleId)return;data.iphone.docPath=b.dataset.path||"/Documents";submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
+  if(cmd==="iphoneDocUp"){if(!data.iphone.bundleId)return;const parts=(data.iphone.docPath||"/Documents").split("/").filter(Boolean);if(parts.length>1)parts.pop();data.iphone.docPath="/"+parts.join("/");if(!data.iphone.docPath.startsWith("/Documents"))data.iphone.docPath="/Documents";submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
+  if(cmd==="iphoneDocNewFolder"){if(!data.iphone.bundleId){toast("Choose an app first");return}const name=prompt("New folder name");if(!name)return;submit("ios.documents.mkdir",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath,name},"iphone");return}
+  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send files to "+data.iphone.docPath,multi:true});if(!r.canceled&&r.paths?.length)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_paths:r.paths,destination_path:data.iphone.docPath},"iphone");return}
   if(cmd==="iphoneMediaRefresh"){submit("ios.media.list",{kind:b.dataset.kind||data.iphone.section},"iphone",true);return}
   if(cmd==="iphoneFileSave"){const destination=await choosePcFolder("Save iPhone file to PC");if(!destination)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination},"iphone");return}
-  if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(!path||!confirm("Delete this item from the iPhone?\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
+  if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId,isFolder=b.dataset.folder==="true";if(!path||!confirm((isFolder?"Delete this folder and everything inside it?":"Delete this item from the iPhone?")+"\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
   if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package/content",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
   if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console},b.dataset.console,true);return}
   if(cmd==="consoleInstall"){const key=b.dataset.console;submit("console.pkg",{console:key,paths:data[key].paths},key);return}
