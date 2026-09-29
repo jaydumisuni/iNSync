@@ -566,6 +566,7 @@ class ShellBoundaryTests(unittest.TestCase):
             'Send files here',
             'destination_path:data.iphone.docPath',
             'path:data.iphone.docPath',
+            'data.iphone.documents=[];renderModule();submit("ios.documents.list"',
         ):
             self.assertIn(token, renderer)
         for token in (
