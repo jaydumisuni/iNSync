@@ -26,6 +26,8 @@ class ShellBoundaryTests(unittest.TestCase):
             "job.cancel",
             "insync:dialog:files",
             "insync:dialog:folder",
+            "insync:fs:roots",
+            "insync:fs:list",
             "insync:clipboard:text",
             "insync:clipboard:image",
         ):
@@ -665,7 +667,9 @@ class ShellBoundaryTests(unittest.TestCase):
             'data-cmd="iphoneDocOpen"',
             'data-cmd="iphoneDocUp"',
             'data-cmd="iphoneDocNewFolder"',
-            'Send files here',
+            'data-cmd="iphoneDocChoose"',
+            'Send selected here',
+            '<b>PC source:</b>',
             'destination_path:data.iphone.docPath',
             'path:data.iphone.docPath',
             'data.iphone.documents=[];renderModule();submit("ios.documents.list"',
@@ -685,10 +689,12 @@ class ShellBoundaryTests(unittest.TestCase):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         for token in (
-            'title:"Send files to "+data.iphone.docPath,multi:true',
-            'local_paths:r.paths',
+            'data-cmd="iphoneDocChoose"',
+            'data.iphone.sendPaths=paths',
+            'local_paths:data.iphone.sendPaths',
             'destination_path:data.iphone.docPath',
             'job.operation==="ios.documents.push"&&r.bundle_id',
+            'data.iphone.sendPaths=[]',
             'submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true)',
         ):
             self.assertIn(token, renderer)
@@ -788,23 +794,67 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, backend)
 
-    def test_pc_bound_transfers_restore_main_window_before_destination_dialog(self):
+    def test_pc_bound_transfers_use_in_app_explorer(self):
         main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        preload = (ROOT / "app" / "electron" / "preload.cjs").read_text(encoding="utf-8")
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         for token in (
-            "async function visibleDialogOwner()",
-            "showMain();",
-            "if(!w||w.isDestroyed()||!w.isVisible())return undefined",
-            "dialog.showOpenDialog(owner",
+            "function localBrowserRoots()",
+            "function localBrowserList(rawPath=\"\")",
+            '"insync:fs:roots"',
+            '"insync:fs:list"',
         ):
             self.assertIn(token, main)
         for token in (
-            "async function choosePcFolder(title)",
-            "await window.ttg.showMain()",
-            'toast("Save to: "+dest.path)',
+            "fsBrowser:Object.freeze",
+            'roots:()=>ipcRenderer.invoke("insync:fs:roots")',
+            'list:(path="")=>ipcRenderer.invoke("insync:fs:list",{path})',
+        ):
+            self.assertIn(token, preload)
+        for token in (
+            'id="localPickerBackdrop"',
+            'id="localPickerPath"',
+            'id="localPickerSearch"',
+            'function openLocalPicker(',
+            'function choosePcFiles(',
+            'async function choosePcFolder(title)',
+            'window.ttg.fsBrowser.list(target)',
             'choosePcFolder("Save Android content to PC")',
             'choosePcFolder("Get "+pkg+" to PC")',
             'choosePcFolder("Save iPhone file to PC")',
+        ):
+            self.assertIn(token, renderer)
+
+    def test_android_pc_to_device_transfer_has_explicit_source_and_destination(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'sendPaths:[],sendDestination:"/sdcard/Download"',
+            'data-cmd="androidSendChoose"',
+            'data-cmd="androidSendChooseFolder"',
+            'id="androidSendDestination"',
+            'data-cmd="androidSendNow"',
+            'submit("adb.files.push"',
+        ):
+            self.assertIn(token, renderer)
+        for token in (
+            'def adb_files_push_job(',
+            '"/sdcard/Download"',
+            '"/storage/emulated/0"',
+            '["push", str(source), destination]',
+            '"adb.files.push": adb_files_push_job',
+        ):
+            self.assertIn(token, backend)
+
+    def test_all_file_source_buttons_use_shared_in_app_picker(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(renderer.count("window.ttg.dialog.openFiles"), 0)
+        for token in (
+            'choosePcFiles({title:"Choose files",multi:true})',
+            'choosePcFiles({title:"Choose Android package"',
+            'choosePcFiles({title:"Choose IPA"',
+            'choosePcFiles({title:"Choose package/content"',
+            'choosePcFiles({title:"Choose files for "+data.iphone.docPath',
         ):
             self.assertIn(token, renderer)
 

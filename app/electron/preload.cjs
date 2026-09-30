@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld("ttg",Object.freeze({
     openFiles:(options={})=>ipcRenderer.invoke("insync:dialog:files",options),
     openFolder:(options={})=>ipcRenderer.invoke("insync:dialog:folder",options)
   }),
+  fsBrowser:Object.freeze({
+    roots:()=>ipcRenderer.invoke("insync:fs:roots"),
+    list:(path="")=>ipcRenderer.invoke("insync:fs:list",{path})
+  }),
   clipboard:Object.freeze({
     readText:()=>ipcRenderer.invoke("insync:clipboard:text"),
     readImage:()=>ipcRenderer.invoke("insync:clipboard:image")

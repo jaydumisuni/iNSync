@@ -1425,6 +1425,89 @@ def adb_media_pull_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     }
 
 
+def adb_files_push_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    raw_sources = job.params.get("sources")
+    if isinstance(raw_sources, list):
+        sources = [Path(str(value)) for value in raw_sources if str(value or "").strip()]
+    else:
+        one = str(job.params.get("source") or "").strip()
+        sources = [Path(one)] if one else []
+    serial = str(job.params.get("serial") or "")
+    destination = posixpath.normpath(str(job.params.get("destination") or "/sdcard/Download").strip())
+    if not sources:
+        return unavailable("Choose one or more PC files or folders before sending to Android")
+    missing = [str(path) for path in sources if not path.exists()]
+    if missing:
+        return unavailable("One or more selected PC sources are unavailable", missing=missing)
+    allowed_roots = ("/sdcard", "/storage/emulated/0")
+    if not any(destination == root or destination.startswith(root + "/") for root in allowed_roots):
+        return unavailable(
+            "Android destination must be inside shared storage",
+            destination=destination,
+            allowed=list(allowed_roots),
+        )
+
+    engine.progress(job, 8, f"Preparing Android destination {destination}")
+    rc, out, err = run_process(
+        job,
+        _adb_prefix(serial) + ["shell", "mkdir", "-p", destination],
+        timeout=90,
+    )
+    if rc != 0:
+        return unavailable(err or out or "Could not create Android destination", destination=destination)
+
+    sent: list[dict[str, Any]] = []
+    total = len(sources)
+    for index, source in enumerate(sources, start=1):
+        pct = 12 + int(((index - 1) / max(1, total)) * 78)
+        engine.progress(job, pct, f"Sending {source.name} to Android")
+        rc, out, err = run_process(
+            job,
+            _adb_prefix(serial) + ["push", str(source), destination],
+            timeout=1800,
+        )
+        if rc != 0:
+            return unavailable(
+                err or out or f"Could not send {source.name} to Android",
+                destination=destination,
+                sent=sent,
+                failed=str(source),
+            )
+        remote_path = posixpath.join(destination, source.name)
+        sent.append({
+            "name": source.name,
+            "local_path": str(source),
+            "remote_path": remote_path,
+            "directory": source.is_dir(),
+        })
+        if source.is_file() and destination.startswith((
+            "/sdcard/DCIM",
+            "/sdcard/Pictures",
+            "/sdcard/Movies",
+            "/sdcard/Music",
+            "/storage/emulated/0/DCIM",
+            "/storage/emulated/0/Pictures",
+            "/storage/emulated/0/Movies",
+            "/storage/emulated/0/Music",
+        )):
+            run_process(
+                job,
+                _adb_prefix(serial) + [
+                    "shell", "am", "broadcast",
+                    "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+                    "-d", f"file://{remote_path}",
+                ],
+                timeout=45,
+            )
+    engine.progress(job, 95, "Android transfer complete")
+    return ok(
+        f"{len(sent)} item(s) sent to Android",
+        destination=destination,
+        items=sent,
+        count=len(sent),
+    )
+
+
 def adb_media_delete_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     remote = str(job.params.get("remote_path") or "").strip()
     serial = str(job.params.get("serial") or "")
@@ -4190,6 +4273,7 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "adb.media.list": adb_media_list_job,
     "adb.media.preview": adb_media_preview_job,
     "adb.media.pull": adb_media_pull_job,
+    "adb.files.push": adb_files_push_job,
     "adb.media.delete": adb_media_delete_job,
     "adb.install": adb_install_job,
     "adb.uninstall": adb_uninstall_job,

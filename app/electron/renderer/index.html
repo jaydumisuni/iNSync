@@ -43,6 +43,25 @@ button,select,input{font:inherit}
 .device-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.72fr);gap:7px;margin-bottom:9px}.android-content{min-height:0;display:flex;flex-direction:column}.android-content .media-list,.android-content .app-list{flex:1;max-height:none;min-height:0}.media-thumb{width:42px;height:42px;object-fit:cover;border-radius:10px;border:1px solid rgba(84,188,255,.13);background:rgba(12,25,42,.9);display:block}.media-list.large .media-row{position:relative;overflow:hidden}.media-list.large .media-row:before{display:none}.media-list.large .media-thumb{width:100%;height:108px;border-radius:10px}.media-list.large .media-copy{min-width:0}.media-placeholder{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(82,183,255,.14);background:linear-gradient(135deg,rgba(30,210,255,.14),rgba(87,95,255,.1));font-size:9px;color:#b8dcff}.media-preview-needed{position:relative;overflow:hidden}.media-preview-needed:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.08) 42%,transparent 64%);transform:translateX(-100%);animation:previewSweep 1.25s linear infinite}@keyframes previewSweep{to{transform:translateX(100%)}}.media-list.large .media-placeholder{width:100%;height:108px;font-size:0}.media-row-main{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}.media-list.large .media-row-main{grid-template-columns:1fr;align-items:start}.media-list.large .media-actions{margin-top:3px}.sectiontabs.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .remote-list{max-height:260px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none}.remote-list::-webkit-scrollbar{display:none;width:0}.sectiontabs.two{grid-template-columns:repeat(2,minmax(0,1fr))}.apk-app-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-bottom:8px}.list-search{height:34px;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;margin:0 0 8px;padding:0 10px;border:1px solid rgba(91,119,191,.28);border-radius:10px;background:rgba(8,13,21,.72);backdrop-filter:blur(14px)}.list-search input{width:100%;min-width:0;border:0!important;background:transparent!important;color:#dce7f5!important;padding:0!important;outline:none!important;font-size:9.5px}.list-search:focus-within{border-color:rgba(67,190,255,.55);box-shadow:0 0 0 2px rgba(67,190,255,.06)}.apk-app-tools .list-search{margin:0}.wifi-adb-grid input{width:100%;min-height:34px;border-radius:10px;border:1px solid rgba(91,119,191,.35);background:rgba(8,13,21,.86);color:#dce7f5;padding:8px 10px;outline:none}.wifi-adb-grid input:focus{border-color:rgba(67,190,255,.6);box-shadow:0 0 0 2px rgba(67,190,255,.08)}.apk-filter{margin:0}.wifi-adb-grid{display:grid;gap:10px}.wifi-adb-grid .buttonbar{margin-top:0}
 .wifi-services{max-height:124px;margin:8px 0;overflow-y:auto;scrollbar-width:none}.wifi-services::-webkit-scrollbar{display:none}.app-identity{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:center;min-width:0}.app-icon{width:36px;height:36px;object-fit:contain;border-radius:9px;background:transparent;display:block}.app-icon-placeholder{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;border:1px solid rgba(82,183,255,.14);background:linear-gradient(135deg,rgba(40,184,255,.13),rgba(87,95,255,.08));font-size:8px;color:#b8dcff}.app-icon-needed{position:relative;overflow:hidden}.app-icon-needed:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.08) 42%,transparent 64%);transform:translateX(-100%);animation:previewSweep 1.25s linear infinite}.modal-body>.card>*:last-child{margin-bottom:1px}
+
+.file-picker-backdrop{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(1,5,12,.72);backdrop-filter:blur(18px);-webkit-app-region:no-drag}
+.file-picker-backdrop.open{display:flex}
+.file-picker{width:min(780px,96vw);height:min(630px,92vh);display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:10px;padding:15px;border-radius:24px;border:1px solid rgba(73,193,255,.28);background:linear-gradient(180deg,rgba(13,23,42,.98),rgba(5,10,21,.98));box-shadow:0 28px 90px rgba(0,0,0,.68),inset 0 0 0 1px rgba(255,255,255,.025)}
+.file-picker-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.file-picker-head h3{margin:0;font-size:20px}.file-picker-head p{margin:2px 0 0;color:#92aac3;font-size:10px}
+.file-picker-close{width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,92,124,.24);background:rgba(75,18,35,.5);color:#ffdce4;font-size:20px;cursor:pointer}
+.file-picker-nav{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:7px}.file-picker-nav button,.file-picker-foot button{border-radius:11px;padding:8px 11px;font-weight:700;cursor:pointer}
+.file-picker-nav input,.file-picker-search input{width:100%;border:1px solid rgba(81,174,255,.2);border-radius:11px;background:rgba(4,10,21,.86);color:#e9f7ff;padding:8px 10px;outline:0}
+.file-picker-nav input:focus,.file-picker-search input:focus{border-color:rgba(53,217,255,.56);box-shadow:0 0 0 2px rgba(53,217,255,.06)}
+.file-picker-search{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;padding:0 4px}.file-picker-search span{font-size:10px;color:#78a2c8;text-transform:uppercase;letter-spacing:.12em}
+.file-picker-list{min-height:0;overflow-y:auto;border:1px solid rgba(79,178,255,.12);border-radius:16px;background:rgba(0,0,0,.18);padding:6px;scrollbar-width:none}.file-picker-list::-webkit-scrollbar{display:none}
+.file-picker-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:9px;min-height:44px;padding:7px 9px;border-radius:11px;border:1px solid transparent;cursor:pointer;color:#e7f4ff}
+.file-picker-row:hover{background:rgba(49,147,255,.07);border-color:rgba(69,177,255,.11)}.file-picker-row.selected{background:linear-gradient(90deg,rgba(35,223,255,.13),rgba(86,103,255,.11));border-color:rgba(68,205,255,.28)}
+.file-picker-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:rgba(61,144,218,.12);border:1px solid rgba(80,178,255,.13);font-size:13px}.file-picker-row[data-type="directory"] .file-picker-icon{color:#ffe18a;background:rgba(255,202,69,.09);border-color:rgba(255,210,93,.13)}
+.file-picker-name{min-width:0}.file-picker-name b{display:block;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-picker-name small{display:block;margin-top:2px;color:#809bb6;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-picker-meta{color:#829cb5;font-size:9px;white-space:nowrap}
+.file-picker-empty{padding:32px 12px;text-align:center;color:#829bb4;font-size:11px}
+.file-picker-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.file-picker-summary{min-width:0;color:#9ab5cf;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file-picker-actions{display:flex;gap:7px}
+
 </style>
 </head>
 <body>
@@ -78,6 +97,28 @@ button,select,input{font:inherit}
     </div>
   </section>
 </div>
+
+<div id="localPickerBackdrop" class="file-picker-backdrop">
+  <section class="file-picker" role="dialog" aria-modal="true" aria-label="iNSync file explorer">
+    <header class="file-picker-head">
+      <div><h3 id="localPickerTitle">Choose files</h3><p id="localPickerHint">Browse this PC without leaving iNSync.</p></div>
+      <button id="localPickerClose" class="file-picker-close" aria-label="Close">&times;</button>
+    </header>
+    <div class="file-picker-nav">
+      <button id="localPickerRoots" class="secondary">This PC</button>
+      <button id="localPickerUp" class="secondary">Up</button>
+      <input id="localPickerPath" type="text" spellcheck="false" autocomplete="off" placeholder="Path">
+      <button id="localPickerGo" class="secondary">Go</button>
+    </div>
+    <div class="file-picker-search"><span>Search</span><input id="localPickerSearch" type="text" placeholder="Filter this folder"></div>
+    <div id="localPickerEntries" class="file-picker-list"></div>
+    <footer class="file-picker-foot">
+      <div id="localPickerSummary" class="file-picker-summary">Nothing selected</div>
+      <div class="file-picker-actions"><button id="localPickerCancel" class="secondary">Cancel</button><button id="localPickerSelect" class="primary">Select</button></div>
+    </footer>
+  </section>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -94,10 +135,10 @@ const data={
   pc:{peers:[],role:"idle",scope:"internet-only",sharedPaths:[],sources:[],destination:""},
   files:{sources:[],destination:"",peers:[],targets:[],mode:"send",remotePeer:"",remoteRoots:[],remoteRoot:"",remotePath:"",remoteEntries:[]},
   clipboard:{peers:[],targets:[],types:{text:true,image:true,files:false},direction:"two-way"},
-  android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{},appIcons:{},search:{}},
+  android:{devices:[],serial:"",apps:[],info:null,section:"photos",view:"list",media:{photos:[],videos:[]},previews:{},appIcons:{},search:{},sendPaths:[],sendDestination:"/sdcard/Download"},
   apk:{paths:[],section:"install",appFilter:"all",appSearch:"",wifi:{status:null,endpoint:"",pairEndpoint:"",pairCode:"",services:[]}},
   ipa:{path:"",validation:null,status:null},
-  iphone:{status:null,section:"photos",view:"list",media:{photos:[],videos:[],music:[]},apps:[],documents:[],bundleId:"",docPath:"/Documents",page:0,previews:{},search:{}},
+  iphone:{status:null,section:"photos",view:"list",media:{photos:[],videos:[],music:[]},apps:[],documents:[],bundleId:"",docPath:"/Documents",page:0,previews:{},search:{},sendPaths:[]},
   playstation:{paths:[],status:null,queue:[],games:[],view:"queue"},
   xbox:{paths:[],status:null},
   switch:{paths:[],status:null}
@@ -190,7 +231,7 @@ const modules={
       const deviceLabel=d.serial||d.devices[0]?.serial||"Auto / first device";
       return [
         '<div class="card android-content"><div class="sectiontabs three">'+tabs+'</div>'+viewbar+body+'</div>',
-        '<div class="card"><h3>Device</h3><div class="device-toolbar">'+lumiDevicePicker(deviceLabel)+lumiAndroidTools()+'</div><div class="rows">'+row("ADB",d.devices.length?deviceLabel:"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",((info.manufacturer||"")+" "+(info.model||"")).trim()||"Refresh device",info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+row("Photos / Videos","MediaStore list, save to PC and delete","Ready",d.devices.length?"green":"")+row("Apps","User and system packages","Direct",d.devices.length?"green":"")+'</div></div>'
+        '<div class="card"><h3>Send to Android</h3><p>Choose PC files or a folder, choose the phone destination, then send.</p><div class="share-path">'+esc(d.sendPaths.length?d.sendPaths.map(x=>x.split(/[\\/]/).pop()).join(" | "):"No PC source selected")+'</div><div class="control"><label>Phone destination</label><select id="androidSendDestination"><option value="/sdcard/Download" '+(d.sendDestination==="/sdcard/Download"?"selected":"")+'>Download</option><option value="/sdcard/DCIM/Camera" '+(d.sendDestination==="/sdcard/DCIM/Camera"?"selected":"")+'>Camera / DCIM</option><option value="/sdcard/Pictures" '+(d.sendDestination==="/sdcard/Pictures"?"selected":"")+'>Pictures</option><option value="/sdcard/Movies" '+(d.sendDestination==="/sdcard/Movies"?"selected":"")+'>Movies</option><option value="/sdcard/Music" '+(d.sendDestination==="/sdcard/Music"?"selected":"")+'>Music</option><option value="/sdcard/Documents" '+(d.sendDestination==="/sdcard/Documents"?"selected":"")+'>Documents</option></select></div><div class="buttonbar"><button class="secondary" data-cmd="androidSendChoose">Choose files</button><button class="secondary" data-cmd="androidSendChooseFolder">Choose folder</button><button class="primary" data-cmd="androidSendNow">Send to Android</button></div><div class="rows" style="margin-top:12px">'+row("ADB",d.devices.length?deviceLabel:"No device",d.devices.length?"Ready":"Disconnected",d.devices.length?"green":"red")+row("Model",((info.manufacturer||"")+" "+(info.model||"")).trim()||"Refresh device",info.android?"Android "+info.android:"Unknown","")+row("Storage",storage.free!==undefined?fmtBytes(storage.free)+" free":"Refresh device",storage.total?fmtBytes(storage.total):"Unknown","")+'</div></div>'
       ];
     }
   },
@@ -248,8 +289,8 @@ const modules={
         const appOptions=d.apps.map(app=>'<option value="'+esc(app.bundle_id)+'" '+(app.bundle_id===d.bundleId?"selected":"")+'>'+esc(app.name||app.bundle_id)+'</option>').join("");
         const docs=d.documents.filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
         const atRoot=(d.docPath||"/Documents")==="/Documents";
-        body=listSearch+'<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="share-path"><b>Destination:</b> '+esc(d.docPath||"/Documents")+'</div><div class="media-list '+d.view+'">'+(docs.length?docs.map(item=>iphoneDocumentRow(item)).join(""):'<div class="empty-state">This folder is empty.</div>')+'</div>';
-        actions='<button class="secondary" data-cmd="iphoneDocUp" '+(atRoot?"disabled":"")+'>Up</button><button class="secondary" data-cmd="iphoneDocNewFolder">New folder</button><button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="primary" data-cmd="iphoneDocSend">Send files here</button>';
+        body=listSearch+'<div class="control"><label>App</label><select id="iphoneDocApp"><option value="">Choose app</option>'+appOptions+'</select></div><div class="share-path"><b>Destination:</b> '+esc(d.docPath||"/Documents")+'</div><div class="share-path"><b>PC source:</b> '+esc(d.sendPaths.length?d.sendPaths.map(x=>x.split(/[\\/]/).pop()).join(" | "):"No PC files selected")+'</div><div class="media-list '+d.view+'">'+(docs.length?docs.map(item=>iphoneDocumentRow(item)).join(""):'<div class="empty-state">This folder is empty.</div>')+'</div>';
+        actions='<button class="secondary" data-cmd="iphoneDocUp" '+(atRoot?"disabled":"")+'>Up</button><button class="secondary" data-cmd="iphoneDocNewFolder">New folder</button><button class="secondary" data-cmd="iphoneDocsRefresh">Refresh</button><button class="secondary" data-cmd="iphoneDocChoose">Choose PC files</button><button class="primary" data-cmd="iphoneDocSend">Send selected here</button>';
       }else{
         const list=(d.media[section]||[]).filter(item=>!q||((item.name||"")+" "+(item.path||"")).toLowerCase().includes(q));
         body=listSearch+'<div class="media-list '+d.view+'">'+(list.length?list.map(item=>iphoneFileRow(item,section==="photos"||section==="videos")).join(""):'<div class="empty-state">Refresh '+section+' to list device content.</div>')+'</div>';
@@ -431,13 +472,91 @@ function rememberJob(job,context,operation){
 function updateRemembered(job){
   const meta=jobs.get(job.id);if(meta){meta.job={...job};const r=recentJobs.find(x=>x.job.id===job.id);if(r)r.job={...job}}
 }
-async function choosePcFolder(title){
-  try{await window.ttg.showMain()}catch{}
-  const dest=await window.ttg.dialog.openFolder({title});
-  if(dest?.canceled||!dest?.path)return "";
-  toast("Save to: "+dest.path);
-  return dest.path;
+let localPickerResolve=null;
+let localPickerState={mode:"files",multi:true,title:"Choose files",filters:[],path:"",parent:"",entries:[],selected:new Set(),search:""};
+
+function pickerAllowedFile(name){
+  const filters=Array.isArray(localPickerState.filters)?localPickerState.filters:[];
+  const exts=filters.flatMap(x=>Array.isArray(x.extensions)?x.extensions:[]).map(x=>String(x).toLowerCase());
+  if(!exts.length||exts.includes("*"))return true;
+  const pos=name.lastIndexOf(".");
+  const ext=pos>=0?name.slice(pos+1).toLowerCase():"";
+  return exts.includes(ext);
 }
+function localPickerFinish(paths=[]){
+  $("#localPickerBackdrop").classList.remove("open");
+  const resolve=localPickerResolve;localPickerResolve=null;
+  if(resolve)resolve(paths);
+}
+function localPickerVisibleEntries(){
+  const q=(localPickerState.search||"").trim().toLowerCase();
+  return (localPickerState.entries||[]).filter(item=>{
+    if(item.type!=="directory"&&!pickerAllowedFile(item.name||""))return false;
+    return !q||(item.name||"").toLowerCase().includes(q);
+  });
+}
+async function localPickerNavigate(target=""){
+  const result=await window.ttg.fsBrowser.list(target);
+  if(!result?.ok){
+    toast(result?.error||"Could not open this folder");
+    return;
+  }
+  localPickerState.path=result.path||"";
+  localPickerState.parent=result.parent||"";
+  localPickerState.entries=result.entries||[];
+  localPickerState.search="";
+  localPickerState.selected=new Set();
+  renderLocalPicker();
+}
+function renderLocalPicker(){
+  const state=localPickerState;
+  $("#localPickerTitle").textContent=state.title||"Choose files";
+  $("#localPickerHint").textContent=state.mode==="folder"?"Browse to the destination folder, then choose Select this folder.":(state.multi?"Select one or more files. Folders open inside iNSync.":"Select one file.");
+  $("#localPickerPath").value=state.path||"This PC";
+  $("#localPickerSearch").value=state.search||"";
+  $("#localPickerUp").disabled=!state.path;
+  const items=localPickerVisibleEntries();
+  $("#localPickerEntries").innerHTML=items.length?items.map(item=>{
+    const selected=state.selected.has(item.path);
+    const isDir=item.type==="directory";
+    const meta=isDir?(item.root?"Drive":"Folder"):(item.size?fmtBytes(item.size):"File");
+    return '<div class="file-picker-row '+(selected?"selected":"")+'" data-picker-path="'+esc(item.path)+'" data-type="'+esc(item.type)+'"><div class="file-picker-icon">'+(isDir?"▰":"•")+'</div><div class="file-picker-name"><b>'+esc(item.name)+'</b><small>'+esc(item.path)+'</small></div><div class="file-picker-meta">'+esc(meta)+'</div></div>';
+  }).join(""):'<div class="file-picker-empty">No matching items in this location.</div>';
+  const picked=[...state.selected];
+  $("#localPickerSummary").textContent=state.mode==="folder"
+    ?(state.path?"Folder: "+state.path:"Choose a drive or folder")
+    :(picked.length?picked.length+" selected — "+picked.map(x=>x.split(/[\\/]/).pop()).join(" | "):"Nothing selected");
+  $("#localPickerSelect").textContent=state.mode==="folder"?"Select this folder":"Select";
+  $("#localPickerSelect").disabled=state.mode==="folder"?!state.path:!picked.length;
+
+  $$(".file-picker-row").forEach(row=>{
+    row.onclick=async()=>{
+      const path=row.dataset.pickerPath||"",type=row.dataset.type||"";
+      if(type==="directory"){await localPickerNavigate(path);return}
+      if(state.mode==="folder")return;
+      if(!state.multi)state.selected.clear();
+      if(state.selected.has(path))state.selected.delete(path);else state.selected.add(path);
+      renderLocalPicker();
+    };
+  });
+}
+function openLocalPicker({title="Choose files",multi=true,filters=[],mode="files"}={}){
+  if(localPickerResolve)localPickerFinish([]);
+  localPickerState={mode,multi,title,filters,path:"",parent:"",entries:[],selected:new Set(),search:""};
+  $("#localPickerBackdrop").classList.add("open");
+  return new Promise(resolve=>{
+    localPickerResolve=resolve;
+    localPickerNavigate("");
+  });
+}
+async function choosePcFiles({title="Choose files",multi=true,filters=[]}={}){
+  return await openLocalPicker({title,multi,filters,mode:"files"});
+}
+async function choosePcFolder(title){
+  const paths=await openLocalPicker({title:title||"Choose folder",multi:false,filters:[],mode:"folder"});
+  return paths[0]||"";
+}
+
 
 async function submit(operation,params={},context=null,quiet=false){
   try{
@@ -492,7 +611,8 @@ function handleFinished(job){
   if(job.operation==="ios.documents.list"){data.iphone.documents=r.items||[];if(r.bundle_id)data.iphone.bundleId=r.bundle_id;if(r.path)data.iphone.docPath=r.path}
   if(job.operation==="ios.app.uninstall")submit("ios.apps",{},"iphone",true);
   if(job.operation==="ios.media.delete"&&r.kind)submit("ios.media.list",{kind:r.kind},"iphone",true);
-  if(job.operation==="ios.documents.push"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.destination_path)data.iphone.docPath=r.destination_path;submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
+  if(job.operation==="ios.documents.push"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.destination_path)data.iphone.docPath=r.destination_path;data.iphone.sendPaths=[];submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
+  if(job.operation==="adb.files.push"){data.android.sendPaths=[];if(data.android.section==="photos"||data.android.section==="videos")submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true);}
   if(job.operation==="ios.documents.mkdir"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.parent_path)data.iphone.docPath=r.parent_path;submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
   if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
@@ -581,7 +701,7 @@ async function command(cmd,b){
   }
   if(cmd==="filesMode"){data.files.mode=b.dataset.mode==="receive"?"receive":"send";renderModule();if(data.files.mode==="receive"&&!data.files.peers.length)submit("peer.list",{},"files",true);return}
   if(cmd==="filesPeerRefresh"){submit("peer.list",{},"files",true);return}
-  if(cmd==="filesChoose"){const r=await window.ttg.dialog.openFiles({title:"Choose files",multi:true});if(!r.canceled){data.files.sources=r.paths;renderModule()}return}
+  if(cmd==="filesChoose"){const paths=await choosePcFiles({title:"Choose files",multi:true});if(paths.length){data.files.sources=paths;renderModule()}return}
   if(cmd==="filesChooseFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose source folder"});if(!r.canceled){data.files.sources=[r.path];renderModule()}return}
   if(cmd==="filesDestination"){const r=await window.ttg.dialog.openFolder({title:data.files.mode==="receive"?"Choose receive folder":"Choose local transfer destination"});if(!r.canceled){data.files.destination=r.path;renderModule()}return}
   if(cmd==="filesTransfer"){syncFileTargets();if(data.files.targets.length){submit("peer.files.send",{sources:data.files.sources,targets:data.files.targets},"files");return}if(data.files.destination){submit("files.copy",{sources:data.files.sources,destination:data.files.destination},"files");return}toast("Choose an approved peer or local destination");return}
@@ -594,7 +714,7 @@ async function command(cmd,b){
   if(cmd==="clipText"){syncClipboardControls();const c=await window.ttg.clipboard.readText();submit("clipboard.text",{text:c.text,targets:data.clipboard.targets,direction:data.clipboard.direction},"clipboard");return}
   if(cmd==="clipImage"){syncClipboardControls();const c=await window.ttg.clipboard.readImage();submit("clipboard.image",{data_url:c.dataUrl,targets:data.clipboard.targets,direction:data.clipboard.direction},"clipboard");return}
   if(cmd==="adbRefresh"){submit("adb.devices",{},currentModule,true);return}
-  if(cmd==="apkBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose Android package",multi:true,filters:[{name:"Android packages",extensions:["apk","apks","xapk"]}]});if(!r.canceled){data.apk.paths=r.paths;renderModule()}return}
+  if(cmd==="apkBrowse"){const paths=await choosePcFiles({title:"Choose Android package",multi:true,filters:[{name:"Android packages",extensions:["apk","apks","xapk"]}]});if(paths.length){data.apk.paths=paths;renderModule()}return}
   if(cmd==="apkInstall"){if(!data.apk.paths.length){toast("Choose an Android package first");return}submit("adb.install",{paths:data.apk.paths,serial:data.android.serial},"apk");return}
   if(cmd==="apkSection"){data.apk.section=b.dataset.section||"install";renderModule();if(data.apk.section==="apps")submit("adb.apps",{serial:data.android.serial},"apk",true);if(data.apk.section==="wifi")submit("adb.wifi.status",{serial:data.android.serial},"apk",true);return}
   if(cmd==="apkAppsRefresh"){submit("adb.apps",{serial:data.android.serial},"apk",true);return}
@@ -612,11 +732,14 @@ async function command(cmd,b){
   if(cmd==="androidRefreshMedia"){if(data.android.section==="apps")data.android.section="photos";submit("adb.media.list",{serial:data.android.serial,kind:data.android.section==="videos"?"videos":"photos"},"android",true);renderModule();return}
   if(cmd==="androidSection"){data.android.section=b.dataset.section||"photos";renderModule();if(data.android.section==="apps")submit("adb.apps",{serial:data.android.serial},"android",true);else submit("adb.media.list",{serial:data.android.serial,kind:data.android.section},"android",true);return}
   if(cmd==="androidView"){data.android.view=b.dataset.view==="large"?"large":"list";renderModule();return}
+  if(cmd==="androidSendChoose"){const paths=await choosePcFiles({title:"Choose files to send to Android",multi:true});if(paths.length){data.android.sendPaths=paths;renderModule()}return}
+  if(cmd==="androidSendChooseFolder"){const folder=await choosePcFolder("Choose folder to send to Android");if(folder){data.android.sendPaths=[folder];renderModule()}return}
+  if(cmd==="androidSendNow"){if(!data.android.sendPaths.length){toast("Choose PC files or a folder first");return}data.android.sendDestination=$("#androidSendDestination")?.value||data.android.sendDestination||"/sdcard/Download";submit("adb.files.push",{serial:data.android.serial,sources:data.android.sendPaths,destination:data.android.sendDestination},"android");return}
   if(cmd==="androidFileSave"){const destination=await choosePcFolder("Save Android content to PC");if(!destination)return;submit("adb.media.pull",{serial:data.android.serial,kind:b.dataset.kind||data.android.section,remote_path:b.dataset.path||"",destination},"android");return}
   if(cmd==="androidFileDelete"){const kind=b.dataset.kind||data.android.section,path=b.dataset.path||"";if(!path||!confirm("Delete this item from the Android device?\\n\\n"+path))return;submit("adb.media.delete",{serial:data.android.serial,kind,remote_path:path},"android");return}
   if(cmd==="appGet"){const pkg=b.dataset.package||"";if(!pkg)return;const destination=await choosePcFolder("Get "+pkg+" to PC");if(!destination)return;submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},currentModule==="android"?"android":"apk");return}
   if(cmd==="appUninstall"){const pkg=b.dataset.package||"";if(!pkg||!confirm("Delete this package from the active Android user?\\n\\n"+pkg))return;submit("adb.uninstall",{package:pkg,serial:data.android.serial},currentModule==="apk"?"apk":"android");return}
-  if(cmd==="ipaBrowse"){const r=await window.ttg.dialog.openFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(!r.canceled){data.ipa.path=r.paths[0]||"";data.ipa.validation=null;renderModule()}return}
+  if(cmd==="ipaBrowse"){const paths=await choosePcFiles({title:"Choose IPA",multi:false,filters:[{name:"iPhone IPA",extensions:["ipa"]}]});if(paths.length){data.ipa.path=paths[0]||"";data.ipa.validation=null;renderModule()}return}
   if(cmd==="ipaValidateInstall"){if(!data.ipa.path){toast("Choose an IPA first");return}submit("ios.validate",{path:data.ipa.path},"validate-install");return}
   if(cmd==="ipaStatus"){submit("ios.status",{},"ipa",true);return}
   if(cmd==="iosStatus"){submit("ios.status",{},"iphone",true);return}
@@ -629,11 +752,12 @@ async function command(cmd,b){
   if(cmd==="iphoneDocOpen"){if(!data.iphone.bundleId)return;data.iphone.docPath=b.dataset.path||"/Documents";data.iphone.documents=[];renderModule();submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
   if(cmd==="iphoneDocUp"){if(!data.iphone.bundleId)return;const parts=(data.iphone.docPath||"/Documents").split("/").filter(Boolean);if(parts.length>1)parts.pop();data.iphone.docPath="/"+parts.join("/");if(!data.iphone.docPath.startsWith("/Documents"))data.iphone.docPath="/Documents";data.iphone.documents=[];renderModule();submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);return}
   if(cmd==="iphoneDocNewFolder"){if(!data.iphone.bundleId){toast("Choose an app first");return}const name=prompt("New folder name");if(!name)return;submit("ios.documents.mkdir",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath,name},"iphone");return}
-  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}const r=await window.ttg.dialog.openFiles({title:"Send files to "+data.iphone.docPath,multi:true});if(!r.canceled&&r.paths?.length)submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_paths:r.paths,destination_path:data.iphone.docPath},"iphone");return}
+  if(cmd==="iphoneDocChoose"){if(!data.iphone.bundleId){toast("Choose an app first");return}const paths=await choosePcFiles({title:"Choose files for "+data.iphone.docPath,multi:true});if(paths.length){data.iphone.sendPaths=paths;renderModule()}return}
+  if(cmd==="iphoneDocSend"){if(!data.iphone.bundleId){toast("Choose an app first");return}if(!data.iphone.sendPaths.length){toast("Choose PC files first");return}submit("ios.documents.push",{bundle_id:data.iphone.bundleId,local_paths:data.iphone.sendPaths,destination_path:data.iphone.docPath},"iphone");return}
   if(cmd==="iphoneMediaRefresh"){submit("ios.media.list",{kind:b.dataset.kind||data.iphone.section},"iphone",true);return}
   if(cmd==="iphoneFileSave"){const destination=await choosePcFolder("Save iPhone file to PC");if(!destination)return;const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId;if(kind==="documents")submit("ios.documents.pull",{bundle_id:bundle,remote_path:path,destination},"iphone");else submit("ios.media.pull",{kind,remote_path:path,destination},"iphone");return}
   if(cmd==="iphoneFileDelete"){const kind=b.dataset.kind||data.iphone.section,path=b.dataset.path||"",bundle=b.dataset.bundle||data.iphone.bundleId,isFolder=b.dataset.folder==="true";if(!path||!confirm((isFolder?"Delete this folder and everything inside it?":"Delete this item from the iPhone?")+"\n\n"+path))return;if(kind==="documents")submit("ios.documents.delete",{bundle_id:bundle,remote_path:path},"iphone");else submit("ios.media.delete",{kind,remote_path:path},"iphone");return}
-  if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package/content",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
+  if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const paths=await choosePcFiles({title:"Choose package/content",multi:true,filters:ext.length?[{name:"Packages",extensions:ext}]:[]});if(paths.length){data[key].paths=paths;renderModule()}return}
   if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console},b.dataset.console,true);return}
   if(cmd==="consoleInstall"){const key=b.dataset.console;submit("console.pkg",{console:key,paths:data[key].paths},key);return}
   if(cmd==="consoleCompanionInstall"){submit("console.companion.install",{},"playstation");return}
@@ -644,6 +768,22 @@ async function command(cmd,b){
   if(cmd==="consoleQueueAction"){submit("console.companion.action",{id:Number(b.dataset.id||0),action:b.dataset.action||""},"playstation");return}
 }
 
+$("#localPickerClose").onclick=()=>localPickerFinish([]);
+$("#localPickerCancel").onclick=()=>localPickerFinish([]);
+$("#localPickerRoots").onclick=()=>localPickerNavigate("");
+$("#localPickerUp").onclick=()=>localPickerNavigate(localPickerState.parent||"");
+$("#localPickerGo").onclick=()=>localPickerNavigate($("#localPickerPath").value.trim()==="This PC"?"":$("#localPickerPath").value.trim());
+$("#localPickerPath").onkeydown=e=>{if(e.key==="Enter")$("#localPickerGo").click()};
+$("#localPickerSearch").oninput=e=>{localPickerState.search=e.target.value||"";renderLocalPicker()};
+$("#localPickerSelect").onclick=()=>{
+  if(localPickerState.mode==="folder"){
+    if(localPickerState.path)localPickerFinish([localPickerState.path]);
+    return;
+  }
+  localPickerFinish([...localPickerState.selected]);
+};
+$("#localPickerBackdrop").onclick=e=>{if(e.target.id==="localPickerBackdrop")localPickerFinish([])};
+
 $$(".hotspot").forEach(b=>b.onclick=()=>openModule(b.dataset.module));
 $("#minBtn").onclick=()=>window.ttg.windowControl("minimize");
 $("#closeBtn").onclick=()=>window.ttg.windowControl("close");
@@ -651,7 +791,7 @@ $("#closeModal").onclick=()=>$("#backdrop").classList.remove("open");
 $("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");const on=m.classList.contains("maximized");$("#maxModal").setAttribute("aria-label",on?"Restore":"Maximize");$("#maxModal").title=on?"Restore":"Maximize"};
 $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
-document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#backdrop").classList.remove("open")});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#localPickerBackdrop").classList.contains("open"))localPickerFinish([]);else $("#backdrop").classList.remove("open")}});
 (async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(next=>{apply(next);if($("#backdrop").classList.contains("open"))renderModule()});apply(state);await refreshEngine()})();
 </script>
 </body>

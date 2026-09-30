@@ -23,6 +23,7 @@ let mainWindow=null;
 let widgetWindow=null;
 let bridge=null;
 let tray=null;
+let lastDialogDirectory="";
 let state={...DEFAULT_STATE,clipboardTypes:{...DEFAULT_STATE.clipboardTypes}};
 let widgetDock={edge:"right",y:null,displayId:null};
 let widgetExpanded=false;
@@ -346,13 +347,66 @@ function revealMainWindow(w){
   broadcastState();
 }
 
-async function visibleDialogOwner(){
+async function prepareNativeDialog(){
   showMain();
-  await new Promise(resolve=>setTimeout(resolve,80));
+  await new Promise(resolve=>setTimeout(resolve,120));
+  if(widgetWindow&&!widgetWindow.isDestroyed())widgetWindow.hide();
   const w=mainWindow;
-  if(!w||w.isDestroyed()||!w.isVisible())return undefined;
-  try{w.moveTop();w.focus()}catch{}
-  return w;
+  if(w&&!w.isDestroyed()){
+    try{
+      if(w.isMinimized())w.restore();
+      w.setSkipTaskbar(false);
+      w.show();
+      w.moveTop();
+      w.focus();
+    }catch{}
+  }
+}
+
+function rememberDialogDirectory(filePaths=[]){
+  const first=Array.isArray(filePaths)?filePaths.find(Boolean):"";
+  if(!first)return;
+  try{
+    const st=fs.statSync(first);
+    lastDialogDirectory=st.isDirectory()?first:path.dirname(first);
+  }catch{
+    lastDialogDirectory=path.dirname(first);
+  }
+}
+
+async function openNativeDialog(kind,options={}){
+  try{
+    await prepareNativeDialog();
+    const isFolder=kind==="folder";
+    const nativeOptions={
+      title:String(options.title||(isFolder?"Choose folder":"Choose files")).slice(0,100),
+      defaultPath:String(options.defaultPath||lastDialogDirectory||app.getPath("home")),
+      properties:isFolder
+        ? ["openDirectory","createDirectory"]
+        : ["openFile",...(options.multi===false?[]:["multiSelections"])]
+    };
+    if(!isFolder){
+      const filters=safeFilters(options);
+      if(filters.length)nativeOptions.filters=filters;
+    }
+    const result=await dialog.showOpenDialog(nativeOptions);
+    rememberDialogDirectory(result.filePaths);
+    return {
+      ok:true,
+      canceled:result.canceled,
+      paths:result.filePaths,
+      path:result.filePaths[0]||""
+    };
+  }catch(error){
+    console.error("iNSync native picker failed",error);
+    return {
+      ok:false,
+      canceled:true,
+      paths:[],
+      path:"",
+      error:String(error&&error.message||error||"Native picker failed")
+    };
+  }
 }
 
 function showMain(){
@@ -378,6 +432,65 @@ function createTray(){
     {label:"Exit",click:()=>app.quit()}
   ]));
   return tray;
+}
+
+function localBrowserRoots(){
+  if(process.platform==="win32"){
+    const roots=[];
+    for(let code=65;code<=90;code++){
+      const drive=String.fromCharCode(code)+":\\";
+      try{
+        if(fs.existsSync(drive))roots.push({name:drive,path:drive,type:"directory",root:true});
+      }catch{}
+    }
+    return roots;
+  }
+  return [{name:"/",path:"/",type:"directory",root:true}];
+}
+
+function localBrowserList(rawPath=""){
+  const requested=String(rawPath||"").trim();
+  if(!requested){
+    return {ok:true,path:"",parent:"",roots:true,entries:localBrowserRoots()};
+  }
+  let resolved;
+  try{
+    resolved=path.resolve(requested);
+  }catch(error){
+    return {ok:false,path:requested,parent:"",entries:[],error:String(error&&error.message||error)};
+  }
+  try{
+    const stat=fs.statSync(resolved);
+    if(!stat.isDirectory()){
+      return {ok:false,path:resolved,parent:path.dirname(resolved),entries:[],error:"Selected path is not a folder"};
+    }
+    const entries=[];
+    for(const dirent of fs.readdirSync(resolved,{withFileTypes:true})){
+      const full=path.join(resolved,dirent.name);
+      let size=0,mtime=0;
+      try{
+        const st=fs.statSync(full);
+        size=st.isFile()?st.size:0;
+        mtime=st.mtimeMs||0;
+      }catch{}
+      entries.push({
+        name:dirent.name,
+        path:full,
+        type:dirent.isDirectory()?"directory":"file",
+        size,
+        mtime
+      });
+    }
+    entries.sort((a,b)=>{
+      if(a.type!==b.type)return a.type==="directory"?-1:1;
+      return a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:"base"});
+    });
+    let parent=path.dirname(resolved);
+    if(parent===resolved)parent="";
+    return {ok:true,path:resolved,parent,roots:false,entries};
+  }catch(error){
+    return {ok:false,path:resolved,parent:path.dirname(resolved),entries:[],error:String(error&&error.message||error)};
+  }
 }
 
 function safeFilters(options={}){
@@ -437,23 +550,10 @@ if(!gotLock){
       broadcastState();
       return state;
     });
-    ipcMain.handle("insync:dialog:files",async(_e,options={})=>{
-      const owner=await visibleDialogOwner();
-      const result=await dialog.showOpenDialog(owner,{
-        title:String(options.title||"Choose files").slice(0,100),
-        properties:["openFile",...(options.multi===false?[]:["multiSelections"])],
-        filters:safeFilters(options)
-      });
-      return {canceled:result.canceled,paths:result.filePaths};
-    });
-    ipcMain.handle("insync:dialog:folder",async(_e,options={})=>{
-      const owner=await visibleDialogOwner();
-      const result=await dialog.showOpenDialog(owner,{
-        title:String(options.title||"Choose folder").slice(0,100),
-        properties:["openDirectory","createDirectory"]
-      });
-      return {canceled:result.canceled,path:result.filePaths[0]||""};
-    });
+    ipcMain.handle("insync:dialog:files",async(_e,options={})=>openNativeDialog("files",options));
+    ipcMain.handle("insync:dialog:folder",async(_e,options={})=>openNativeDialog("folder",options));
+    ipcMain.handle("insync:fs:roots",()=>({ok:true,entries:localBrowserRoots()}));
+    ipcMain.handle("insync:fs:list",(_e,params={})=>localBrowserList(params.path||""));
     ipcMain.handle("insync:clipboard:text",()=>({text:clipboard.readText()}));
     ipcMain.handle("insync:clipboard:image",()=>{
       const image=clipboard.readImage();
