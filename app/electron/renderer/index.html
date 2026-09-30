@@ -98,7 +98,7 @@ const data={
   apk:{paths:[],section:"install",appFilter:"all",appSearch:"",wifi:{status:null,endpoint:"",pairEndpoint:"",pairCode:"",services:[]}},
   ipa:{path:"",validation:null,status:null},
   iphone:{status:null,section:"photos",view:"list",media:{photos:[],videos:[],music:[]},apps:[],documents:[],bundleId:"",docPath:"/Documents",page:0,previews:{},search:{}},
-  playstation:{paths:[],status:null},
+  playstation:{paths:[],status:null,queue:[],games:[],view:"queue"},
   xbox:{paths:[],status:null},
   switch:{paths:[],status:null}
 };
@@ -347,11 +347,55 @@ function jobCard(job){const pct=Math.round(job.progress||0);return '<div class="
 
 
 
+function psQueueRow(item){
+  const state=(item.state||"queued").toLowerCase(),pct=Math.max(0,Math.min(100,Number(item.percent||0)));
+  const buttons=[];
+  if(state==="active")buttons.push('<button class="secondary mini" data-cmd="consoleQueueAction" data-id="'+esc(item.id)+'" data-action="pause">Pause</button>');
+  if(state==="paused")buttons.push('<button class="primary mini" data-cmd="consoleQueueAction" data-id="'+esc(item.id)+'" data-action="resume">Resume</button>');
+  if(state==="queued")buttons.push('<button class="secondary mini" data-cmd="consoleQueueAction" data-id="'+esc(item.id)+'" data-action="top">Move to top</button>');
+  if(["queued","active","paused","starting"].includes(state))buttons.push('<button class="danger mini" data-cmd="consoleQueueAction" data-id="'+esc(item.id)+'" data-action="cancel">Cancel</button>');
+  return '<div class="queue-card"><div class="queue-head"><div><b>'+esc(item.name||("PKG "+item.id))+'</b><small>'+esc(state)+' | '+esc(fmtBytes(item.size||item.total||0))+'</small></div>'+tag(state,state==="completed"?"green":state==="error"?"red":"")+'</div><div class="progress"><i style="width:'+pct+'%"></i></div><div class="queue-pct">'+pct+'%</div><div class="buttonbar" style="margin-top:8px">'+buttons.join("")+'</div></div>';
+}
+function psGameRow(game){
+  return '<div class="row"><div><b>'+esc(game.title||game.title_id||"Unknown title")+'</b><small>'+esc((game.title_id||"")+(game.version?" | v"+game.version:""))+'</small></div>'+tag(game.category||"installed","green")+'</div>';
+}
+function psConsoleRender(){
+  const d=data.playstation,status=d.status||{},q=queueJobFor("playstation");
+  const paired=!!status.companion_paired,ready=!!status.companion_ready,view=d.view||"queue";
+  const bootstrap=status.companion_pkg_ready===false
+    ? '<div class="file">Companion PKG: Missing from this iNSync build</div>'
+    : '<div class="file">Companion PKG: Bundled</div>';
+  const companion='<div class="card"><h3>iNSync Companion</h3><div class="rows">'
+    +row("Console",status.ip||"Not found",status.message||"Checking...",status.ok?"green":"")
+    +row("Companion",ready?(paired?"Open + Paired":"Open — Pair required"):"Not running",ready?"49560":"Bootstrap",paired?"green":"")
+    +row("GoldHEN FTP",status.ftp_ready?"2121 ready":"Not active",status.ftp_ready?"Ready":"Off",status.ftp_ready?"green":"")
+    +row("RPI bootstrap",status.rpi_ready?"12800 ready":"Not active",status.rpi_ready?"Ready":"Optional",status.rpi_ready?"green":"")
+    +'</div>'+bootstrap+'<div class="buttonbar" style="margin-top:10px">'
+    +(!ready?'<button class="primary" data-cmd="consoleCompanionInstall">Install Companion</button>':'')
+    +(ready&&!paired?'<button class="primary" data-cmd="consoleCompanionPair">Pair</button>':'')
+    +'<button class="secondary" data-cmd="consoleStatus" data-console="playstation">Refresh status</button></div></div>';
+
+  const source='<div class="card"><h3>Install from PC</h3><div class="control"><label>PKG files</label><div class="share-path">'
+    +esc(d.paths.length?d.paths.map(x=>x.split(/[\\/]/).pop()).join(" • "):"No package selected")
+    +'</div></div><div class="buttonbar"><button class="secondary" data-cmd="consoleBrowse" data-console="playstation" data-ext="pkg">Choose PKGs</button><button class="primary" data-cmd="consoleInstall" data-console="playstation" '+(!paired?'disabled':'')+'>Add to install queue</button></div>'
+    +(q?jobCard(q):'')+'</div>';
+
+  const tabs='<div class="buttonbar"><button class="'+(view==="queue"?"primary":"secondary")+'" data-cmd="consoleView" data-view="queue">Install queue</button><button class="'+(view==="games"?"primary":"secondary")+'" data-cmd="consoleView" data-view="games">Installed games</button></div>';
+  let content="";
+  if(view==="games"){
+    content='<div class="rows" style="margin-top:10px">'+(d.games.length?d.games.map(psGameRow).join(""):'<div class="empty-state">'+(paired?"No installed titles loaded.":"Pair Companion to read installed titles.")+'</div>')+'</div><div class="buttonbar"><button class="secondary" data-cmd="consoleGamesRefresh" '+(!paired?'disabled':'')+'>Refresh games</button></div>';
+  }else{
+    content='<div style="margin-top:10px">'+(d.queue.length?d.queue.map(psQueueRow).join(""):'<div class="empty-state">'+(paired?"Nothing queued.":"Pair Companion to control the queue.")+'</div>')+'</div><div class="buttonbar"><button class="secondary" data-cmd="consoleQueueRefresh" '+(!paired?'disabled':'')+'>Refresh queue</button></div>';
+  }
+  return [companion,source,'<div class="card"><h3>Console manager</h3>'+tabs+content+'</div>'];
+}
+
 function consoleRender(key,label,extensions){
+  if(key==="playstation")return psConsoleRender();
   const d=data[key],q=queueJobFor(key),status=d.status||{};
   return [
-    '<div class="card">'+actionTile(key,label,"Connected device / package target.")+'<div class="control"><label>Choose package/content</label><div class="share-path">'+esc(d.paths.length?d.paths.map(x=>x.split(/[\\/]/).pop()).join(" • "):"No package selected")+'</div></div><div class="mini-explorer" style="margin-top:10px"><div class="pane"><h4>PC source</h4>'+selectedPaths(d.paths,"Choose package/content")+'</div><div class="pane"><h4>'+esc(label)+' status</h4><div class="file">'+esc(status.message||"Adapter not checked")+'</div>'+(status.ip?'<div class="file">IP: '+esc(status.ip)+'</div>':'')+(status.mode?'<div class="file">Transport: '+esc(status.mode)+'</div>':'')+(key==="playstation"&&status.ftp_ready!==undefined?'<div class="file">GoldHEN FTP: '+(status.ftp_ready?"Ready":"Off")+'</div>':'')+(key==="playstation"&&status.rpi_ready!==undefined?'<div class="file">RPI 12800: '+(status.rpi_ready?"Ready":"Not active")+'</div>':'')+(key==="playstation"&&status.staged_count!==undefined?'<div class="file">Staged PKGs: '+esc(status.staged_count)+'</div>':'')+(status.storage?.free!==undefined?'<div class="file">'+esc(fmtBytes(status.storage.free))+' free</div>':'')+'<div class="file">Queue: '+(q&&["queued","running"].includes(q.status)?1:0)+'</div></div></div><div class="buttonbar"><button class="secondary" data-cmd="consoleBrowse" data-console="'+key+'" data-ext="'+extensions.join(",")+'">Choose package</button><button class="primary" data-cmd="consoleInstall" data-console="'+key+'">Send / Install</button><button class="secondary" data-cmd="consoleStatus" data-console="'+key+'">Refresh status</button></div></div>',
-    '<div class="card"><h3>Queue</h3>'+(q?jobCard(q):'<div class="empty-state">Nothing queued.</div>')+'<div class="rows" style="margin-top:10px">'+row("Backend","Capability-gated per console/firmware",status.available===false?"Unavailable":(status.mode||"Adapter"),status.ok?"green":"")+'</div></div>'
+    '<div class="card">'+actionTile(key,label,"Connected device / package target.")+'<div class="control"><label>Choose package/content</label><div class="share-path">'+esc(d.paths.length?d.paths.map(x=>x.split(/[\\/]/).pop()).join(" • "):"No package selected")+'</div></div><div class="mini-explorer" style="margin-top:10px"><div class="pane"><h4>PC source</h4>'+selectedPaths(d.paths,"Choose package/content")+'</div><div class="pane"><h4>'+esc(label)+' status</h4><div class="file">'+esc(status.message||"Adapter not checked")+'</div>'+(status.storage?.free!==undefined?'<div class="file">'+esc(fmtBytes(status.storage.free))+' free</div>':'')+'</div></div><div class="buttonbar"><button class="secondary" data-cmd="consoleBrowse" data-console="'+key+'" data-ext="'+extensions.join(",")+'">Choose package</button><button class="primary" data-cmd="consoleInstall" data-console="'+key+'">Send / Install</button><button class="secondary" data-cmd="consoleStatus" data-console="'+key+'">Refresh status</button></div></div>',
+    '<div class="card"><h3>Queue</h3>'+(q?jobCard(q):'<div class="empty-state">Nothing queued.</div>')+'</div>'
   ];
 }
 
@@ -452,7 +496,12 @@ function handleFinished(job){
   if(job.operation==="ios.documents.mkdir"&&r.bundle_id){data.iphone.bundleId=r.bundle_id;if(r.parent_path)data.iphone.docPath=r.parent_path;submit("ios.documents.list",{bundle_id:r.bundle_id,path:data.iphone.docPath},"iphone",true);}
   if(job.operation==="ios.documents.delete")submit("ios.documents.list",{bundle_id:data.iphone.bundleId,path:data.iphone.docPath},"iphone",true);
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
-  if(job.operation==="console.pkg"&&meta.context&&data[meta.context])data[meta.context].status=r;
+  if(job.operation==="console.pkg"&&meta.context&&data[meta.context]){data[meta.context].status={...(data[meta.context].status||{}),...r};if(meta.context==="playstation"&&Array.isArray(r.items))data.playstation.queue=r.items}
+  if(job.operation==="console.companion.install"){data.playstation.status={...(data.playstation.status||{}),...r};submit("console.status",{console:"playstation"},"playstation",true)}
+  if(job.operation==="console.companion.pair"){data.playstation.status={...(data.playstation.status||{}),...r};submit("console.status",{console:"playstation"},"playstation",true);if(r.paired){submit("console.companion.queue",{},"playstation",true);submit("console.companion.games",{},"playstation",true)}}
+  if(job.operation==="console.companion.queue")data.playstation.queue=r.items||[];
+  if(job.operation==="console.companion.games")data.playstation.games=r.games||[];
+  if(job.operation==="console.companion.action")data.playstation.queue=r.items||[];
   if($("#backdrop").classList.contains("open"))renderModule();
 }
 window.ttg.onBackendEvent(evt=>{
@@ -587,6 +636,12 @@ async function command(cmd,b){
   if(cmd==="consoleBrowse"){const key=b.dataset.console,ext=(b.dataset.ext||"").split(",").filter(Boolean);const r=await window.ttg.dialog.openFiles({title:"Choose package/content",multi:true,filters:[{name:"Packages",extensions:ext}]});if(!r.canceled){data[key].paths=r.paths;renderModule()}return}
   if(cmd==="consoleStatus"){submit("console.status",{console:b.dataset.console},b.dataset.console,true);return}
   if(cmd==="consoleInstall"){const key=b.dataset.console;submit("console.pkg",{console:key,paths:data[key].paths},key);return}
+  if(cmd==="consoleCompanionInstall"){submit("console.companion.install",{},"playstation");return}
+  if(cmd==="consoleCompanionPair"){submit("console.companion.pair",{},"playstation");return}
+  if(cmd==="consoleQueueRefresh"){submit("console.companion.queue",{},"playstation",true);return}
+  if(cmd==="consoleGamesRefresh"){submit("console.companion.games",{},"playstation",true);return}
+  if(cmd==="consoleView"){data.playstation.view=b.dataset.view||"queue";renderModule();if(data.playstation.status?.companion_paired)submit(data.playstation.view==="games"?"console.companion.games":"console.companion.queue",{},"playstation",true);return}
+  if(cmd==="consoleQueueAction"){submit("console.companion.action",{id:Number(b.dataset.id||0),action:b.dataset.action||""},"playstation");return}
 }
 
 $$(".hotspot").forEach(b=>b.onclick=()=>openModule(b.dataset.module));

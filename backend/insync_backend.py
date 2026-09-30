@@ -3303,6 +3303,7 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 PS4_FTP_PORT = int(os.environ.get("INSYNC_PS4_FTP_PORT", "2121"))
 PS4_RPI_PORT = int(os.environ.get("INSYNC_PS4_RPI_PORT", "12800"))
+PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "49560"))
 PS4_BINLOADER_PORT = int(os.environ.get("INSYNC_PS4_BINLOADER_PORT", "9090"))
 PS4_KLOG_PORT = int(os.environ.get("INSYNC_PS4_KLOG_PORT", "3232"))
 PS4_PACKAGE_HTTP_PORT = int(os.environ.get("INSYNC_PS4_HTTP_PORT", "8337"))
@@ -3320,10 +3321,30 @@ def _ps4_state_path() -> Path:
     return base / "ps4.json"
 
 
-def _ps4_load_saved_ip() -> str:
+def _ps4_load_state() -> dict[str, Any]:
     try:
         payload = json.loads(_ps4_state_path().read_text(encoding="utf-8"))
-        value = str(payload.get("ip") or "").strip()
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _ps4_write_state(**changes: Any) -> None:
+    try:
+        payload = _ps4_load_state()
+        payload.update(changes)
+        payload["updated_at"] = time.time()
+        _ps4_state_path().write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _ps4_load_saved_ip() -> str:
+    try:
+        value = str(_ps4_load_state().get("ip") or "").strip()
         ipaddress.ip_address(value)
         return value
     except Exception:
@@ -3331,14 +3352,32 @@ def _ps4_load_saved_ip() -> str:
 
 
 def _ps4_save_ip(ip: str) -> None:
-    try:
-        _ps4_state_path().write_text(
-            json.dumps({"ip": ip, "updated_at": time.time()}, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+    _ps4_write_state(ip=ip)
 
+
+def _ps4_companion_token() -> str:
+    return str(_ps4_load_state().get("companion_token") or "").strip()
+
+
+def _ps4_save_companion_token(token: str) -> None:
+    _ps4_write_state(companion_token=str(token or "").strip())
+
+
+def _bundled_ps4_companion_pkg() -> Path | None:
+    candidates: list[Path] = []
+    source_root = Path(__file__).resolve().parents[1]
+    candidates.append(source_root / "resources" / "ps4" / "iNSync-Companion.pkg")
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        candidates.append(exe.parent.parent / "resources" / "ps4" / "iNSync-Companion.pkg")
+        candidates.append(exe.parent / "ps4" / "iNSync-Companion.pkg")
+    override = os.environ.get("INSYNC_PS4_COMPANION_PKG", "").strip()
+    if override:
+        candidates.insert(0, Path(override))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 def _tcp_open(host: str, port: int, timeout: float = 0.45) -> bool:
     try:
@@ -3671,6 +3710,69 @@ def _ps4_package_server(paths: list[Path], ps4_ip: str) -> tuple[str, list[str]]
         return f"{local_ip}:{port}", urls
 
 
+def _ps4_companion_request(
+    ip: str,
+    endpoint: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    token: str = "",
+    timeout: float = 6.0,
+) -> dict[str, Any]:
+    data = None if payload is None else json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    headers = {"Accept": "application/json"}
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib_request.Request(
+        f"http://{ip}:{PS4_COMPANION_PORT}{endpoint}",
+        data=data,
+        headers=headers,
+        method=method.upper(),
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", "replace")
+            decoded = json.loads(raw or "{}")
+            return decoded if isinstance(decoded, dict) else {"response": decoded}
+    except urllib_error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        if exc.code == 401:
+            return {"ok": False, "unauthorized": True, "http_status": 401, "response": body}
+        raise RuntimeError(f"iNSync Companion HTTP {exc.code}: {body}") from exc
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"iNSync Companion request failed: {exc}") from exc
+
+
+def _ps4_companion_authenticated_status(ip: str) -> tuple[bool, dict[str, Any] | None]:
+    token = _ps4_companion_token()
+    if not token:
+        return False, None
+    try:
+        data = _ps4_companion_request(ip, "/v1/status", token=token, timeout=1.2)
+    except Exception:
+        return False, None
+    if data.get("unauthorized"):
+        _ps4_save_companion_token("")
+        return False, None
+    return bool(data.get("ok")), data
+
+
+def _ps4_companion_queue(ip: str) -> dict[str, Any]:
+    token = _ps4_companion_token()
+    if not token:
+        return {"items": []}
+    return _ps4_companion_request(ip, "/v1/queue", token=token, timeout=2.5)
+
+
+def _ps4_companion_games(ip: str) -> dict[str, Any]:
+    token = _ps4_companion_token()
+    if not token:
+        return {"games": []}
+    return _ps4_companion_request(ip, "/v1/games", token=token, timeout=4.0)
+
+
 def _ps4_rpi_request(ip: str, endpoint: str, payload: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
     data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     req = urllib_request.Request(
@@ -3721,6 +3823,11 @@ def _ps4_status_data() -> dict[str, Any]:
     if not ip:
         return unavailable("No GoldHEN PS4 found on the local network", console="playstation")
     ftp_ready = "GoldHEN FTP" in _ps4_ftp_banner(ip)
+    companion_ready = _tcp_open(ip, PS4_COMPANION_PORT, 0.4)
+    companion_paired = False
+    companion_status: dict[str, Any] | None = None
+    if companion_ready:
+        companion_paired, companion_status = _ps4_companion_authenticated_status(ip)
     rpi_ready = _tcp_open(ip, PS4_RPI_PORT, 0.4)
     binloader_ready = _tcp_open(ip, PS4_BINLOADER_PORT, 0.4)
     klog_ready = _tcp_open(ip, PS4_KLOG_PORT, 0.4)
@@ -3741,12 +3848,19 @@ def _ps4_status_data() -> dict[str, Any]:
                     ftp.close()
         except Exception:
             pass
-    if rpi_ready:
-        message = f"PS4 {ip} ready — Remote Package Installer is listening on {PS4_RPI_PORT}"
-        mode = "rpi"
+    companion_pkg = _bundled_ps4_companion_pkg()
+    if companion_ready and companion_paired:
+        message = f"PS4 {ip} ready — iNSync Companion paired"
+        mode = "insync-companion"
+    elif companion_ready:
+        message = f"PS4 {ip} ready — iNSync Companion is open; pair to control installs"
+        mode = "insync-companion-unpaired"
+    elif rpi_ready:
+        message = f"PS4 {ip} ready — Remote Package Installer can bootstrap iNSync Companion"
+        mode = "rpi-bootstrap"
     elif ftp_ready:
-        message = f"PS4 {ip} ready over GoldHEN FTP — PKGs can be staged to /data/pkg; RPI is not active"
-        mode = "goldhen-ftp"
+        message = f"PS4 {ip} ready over GoldHEN FTP — iNSync Companion can be staged for one-time install"
+        mode = "goldhen-ftp-bootstrap"
     else:
         message = f"PS4 {ip} detected but package transport is unavailable"
         mode = "unavailable"
@@ -3757,6 +3871,12 @@ def _ps4_status_data() -> dict[str, Any]:
         mode=mode,
         ftp_ready=ftp_ready,
         ftp_port=PS4_FTP_PORT,
+        companion_ready=companion_ready,
+        companion_paired=companion_paired,
+        companion_port=PS4_COMPANION_PORT,
+        companion_status=companion_status,
+        companion_pkg_ready=bool(companion_pkg),
+        companion_pkg_size=companion_pkg.stat().st_size if companion_pkg else 0,
         rpi_ready=rpi_ready,
         rpi_port=PS4_RPI_PORT,
         binloader_ready=binloader_ready,
@@ -3767,7 +3887,6 @@ def _ps4_status_data() -> dict[str, Any]:
         staged_count=len(staged),
     )
 
-
 def console_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     console = str(job.params.get("console") or "console").strip().lower()
     if console != "playstation":
@@ -3776,6 +3895,192 @@ def console_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     result = _ps4_status_data()
     engine.progress(job, 85, str(result.get("message") or "PS4 status ready"))
     return result
+
+
+def console_companion_install_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    engine.progress(job, 8, "Finding PS4")
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if status.get("companion_ready"):
+        return ok(
+            "iNSync Companion is already installed and open",
+            console="playstation",
+            ip=ip,
+            mode="insync-companion",
+            companion_ready=True,
+            companion_paired=bool(status.get("companion_paired")),
+        )
+    pkg = _bundled_ps4_companion_pkg()
+    if not pkg:
+        return unavailable("The bundled iNSync Companion PKG is missing", console="playstation", ip=ip)
+
+    if status.get("rpi_ready"):
+        engine.progress(job, 20, "Starting iNSync Companion package server")
+        server, urls = _ps4_package_server([pkg], ip)
+        req = urllib_request.Request(urls[0], method="HEAD")
+        with urllib_request.urlopen(req, timeout=4) as response:
+            if int(response.headers.get("Content-Length") or -1) != pkg.stat().st_size:
+                raise IOError("iNSync Companion package server size mismatch")
+        engine.progress(job, 55, "Installing iNSync Companion on PS4")
+        response = _ps4_rpi_request(ip, "/api/install", {"type": "direct", "packages": urls}, timeout=12)
+        engine.progress(job, 95, "Companion install request accepted")
+        return ok(
+            "iNSync Companion install started. Open iNSync Companion on the PS4 when installation completes.",
+            console="playstation",
+            ip=ip,
+            mode="rpi-bootstrap",
+            install_started=True,
+            package_server=server,
+            rpi_response=response,
+            companion_pkg=str(pkg),
+        )
+
+    if status.get("ftp_ready"):
+        engine.progress(job, 20, "Staging iNSync Companion through GoldHEN FTP")
+        staged = _ps4_ftp_stage_packages(ip, [pkg], job, engine)
+        engine.progress(job, 95, "iNSync Companion staged")
+        return ok(
+            "iNSync Companion is staged in /data/pkg. This PS4 currently exposes FTP only, so install it once from GoldHEN Package Installer, then open it and pair.",
+            console="playstation",
+            ip=ip,
+            mode="goldhen-ftp-bootstrap",
+            install_started=False,
+            requires_console_install=True,
+            companion_pkg=str(pkg),
+            package_source="/data/pkg",
+            **staged,
+        )
+    return unavailable(
+        "PS4 found, but neither iNSync Companion, RPI nor GoldHEN FTP is available",
+        console="playstation",
+        ip=ip,
+    )
+
+
+def console_companion_pair_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if not status.get("companion_ready"):
+        return unavailable("Open iNSync Companion on the PS4 first", console="playstation", ip=ip)
+    if status.get("companion_paired"):
+        return ok("iNSync Companion is already paired", console="playstation", ip=ip, paired=True)
+
+    request_id = uuid.uuid4().hex
+    client = socket.gethostname() or "iNSync PC"
+    engine.progress(job, 10, "Requesting PS4 pairing")
+    response = _ps4_companion_request(
+        ip,
+        "/v1/pair/request",
+        method="POST",
+        payload={"request_id": request_id, "client": client},
+        timeout=4,
+    )
+    if str(response.get("status") or "") != "waiting":
+        return unavailable("Companion did not accept the pair request", response=response, ip=ip)
+
+    wait_seconds = max(5.0, min(120.0, float(job.params.get("timeout") or 90.0)))
+    deadline = time.monotonic() + wait_seconds
+    engine.progress(job, 20, "Press X in iNSync Companion on the PS4 to pair")
+    while time.monotonic() < deadline:
+        result = _ps4_companion_request(
+            ip,
+            f"/v1/pair/status?request_id={quote(request_id)}",
+            timeout=3,
+        )
+        state = str(result.get("status") or "")
+        if state == "approved":
+            token = str(result.get("token") or "")
+            if not token:
+                return unavailable("PS4 approved pairing but returned no token", ip=ip)
+            _ps4_save_companion_token(token)
+            engine.progress(job, 95, "PS4 paired")
+            paired, companion_status = _ps4_companion_authenticated_status(ip)
+            return ok(
+                "iNSync Companion paired",
+                console="playstation",
+                ip=ip,
+                paired=paired,
+                companion_status=companion_status,
+            )
+        if state == "rejected":
+            return unavailable("Pairing was rejected on the PS4", console="playstation", ip=ip)
+        time.sleep(0.5)
+    return unavailable(
+        "Pair request is still waiting. Press X in iNSync Companion and try Pair again.",
+        console="playstation",
+        ip=ip,
+        pairing_waiting=True,
+    )
+
+
+def console_companion_queue_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if not status.get("companion_paired"):
+        return unavailable("Pair iNSync Companion first", console="playstation", ip=ip)
+    queue_data = _ps4_companion_queue(ip)
+    return ok(
+        "PS4 install queue refreshed",
+        console="playstation",
+        ip=ip,
+        items=list(queue_data.get("items") or []),
+    )
+
+
+def console_companion_games_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if not status.get("companion_paired"):
+        return unavailable("Pair iNSync Companion first", console="playstation", ip=ip)
+    games_data = _ps4_companion_games(ip)
+    return ok(
+        "Installed PS4 titles refreshed",
+        console="playstation",
+        ip=ip,
+        games=list(games_data.get("games") or []),
+    )
+
+
+def console_companion_action_job(job: Job, engine: JobEngine) -> dict[str, Any]:
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if not status.get("companion_paired"):
+        return unavailable("Pair iNSync Companion first", console="playstation", ip=ip)
+    try:
+        item_id = int(job.params.get("id") or 0)
+    except (TypeError, ValueError):
+        item_id = 0
+    action = str(job.params.get("action") or "").strip().lower()
+    if item_id <= 0 or action not in {"pause", "resume", "cancel", "top"}:
+        return unavailable("Invalid PS4 queue action")
+    result = _ps4_companion_request(
+        ip,
+        f"/v1/queue/{item_id}/{action}",
+        method="POST",
+        payload={},
+        token=_ps4_companion_token(),
+        timeout=4,
+    )
+    queue_data = _ps4_companion_queue(ip)
+    return ok(
+        f"PS4 queue action '{action}' sent",
+        console="playstation",
+        ip=ip,
+        action=action,
+        id=item_id,
+        response=result,
+        items=list(queue_data.get("items") or []),
+    )
 
 
 def console_pkg_job(job: Job, engine: JobEngine) -> dict[str, Any]:
@@ -3790,54 +4095,82 @@ def console_pkg_job(job: Job, engine: JobEngine) -> dict[str, Any]:
     if invalid:
         return unavailable("One or more selected PS4 packages are unavailable or not .pkg files", invalid=invalid)
 
-    engine.progress(job, 8, "Finding GoldHEN PS4")
+    engine.progress(job, 8, "Finding iNSync Companion")
     status = _ps4_status_data()
     if not status.get("ok"):
         return status
     ip = str(status.get("ip") or "")
-    if status.get("rpi_ready"):
-        engine.progress(job, 20, "Starting local PKG server")
-        server, urls = _ps4_package_server(paths, ip)
-        # Local proof that every generated URL resolves before telling the PS4.
-        for url, path in zip(urls, paths):
-            req = urllib_request.Request(url, method="HEAD")
-            with urllib_request.urlopen(req, timeout=4) as response:
-                if int(response.headers.get("Content-Length") or -1) != path.stat().st_size:
-                    raise IOError(f"Local package server size mismatch for {path.name}")
-        engine.progress(job, 45, "Sending install request to PS4")
-        response = _ps4_rpi_request(ip, "/api/install", {"type": "direct", "packages": urls}, timeout=10)
-        task_id = _ps4_find_task_id(response)
-        engine.progress(job, 92, "PS4 accepted install request")
-        return ok(
-            f"PS4 install started for {len(paths)} PKG(s)",
+    if not status.get("companion_ready"):
+        return unavailable(
+            "Install and open iNSync Companion on the PS4 before sending game PKGs",
             console="playstation",
             ip=ip,
-            mode="rpi",
-            install_started=True,
-            task_id=task_id,
-            rpi_response=response,
-            package_server=server,
-            packages=[
-                {"name": path.name, "path": str(path), "size": path.stat().st_size, "url": url}
-                for path, url in zip(paths, urls)
-            ],
+            requires_companion=True,
+            bootstrap_mode=status.get("mode"),
+            companion_pkg_ready=bool(status.get("companion_pkg_ready")),
+        )
+    if not status.get("companion_paired"):
+        return unavailable(
+            "Pair iNSync Companion before sending game PKGs",
+            console="playstation",
+            ip=ip,
+            requires_pairing=True,
         )
 
-    if status.get("ftp_ready"):
-        engine.progress(job, 15, "RPI is not active; staging PKGs through GoldHEN FTP")
-        staged = _ps4_ftp_stage_packages(ip, paths, job, engine)
-        engine.progress(job, 95, "PKGs staged to /data/pkg")
-        return ok(
-            f"{len(paths)} PKG(s) staged to /data/pkg; start GoldHEN Package Installer to install them",
-            console="playstation",
-            ip=ip,
-            mode="goldhen-ftp",
-            install_started=False,
-            requires_rpi=True,
-            package_source="/data/pkg",
-            **staged,
+    engine.progress(job, 20, "Starting local PKG server")
+    server, urls = _ps4_package_server(paths, ip)
+    for url, path in zip(urls, paths):
+        req = urllib_request.Request(url, method="HEAD")
+        with urllib_request.urlopen(req, timeout=4) as response:
+            if int(response.headers.get("Content-Length") or -1) != path.stat().st_size:
+                raise IOError(f"Local package server size mismatch for {path.name}")
+
+    token = _ps4_companion_token()
+    queued: list[dict[str, Any]] = []
+    total = max(1, len(paths))
+    for index, (path, url) in enumerate(zip(paths, urls), start=1):
+        engine.progress(
+            job,
+            30 + (55 * (index - 1) / total),
+            f"Queueing {path.name} on PS4",
         )
-    return unavailable("PS4 is reachable but no supported package transport is active", console="playstation", ip=ip)
+        response = _ps4_companion_request(
+            ip,
+            "/v1/queue/add",
+            method="POST",
+            payload={"url": url, "name": path.name, "size": path.stat().st_size},
+            token=token,
+            timeout=5,
+        )
+        if response.get("unauthorized"):
+            _ps4_save_companion_token("")
+            return unavailable(
+                "Companion pairing expired; pair again before sending PKGs",
+                console="playstation",
+                ip=ip,
+                requires_pairing=True,
+            )
+        queued.append(
+            {
+                "id": int(response.get("id") or 0),
+                "name": path.name,
+                "path": str(path),
+                "size": path.stat().st_size,
+                "url": url,
+            }
+        )
+    queue_data = _ps4_companion_queue(ip)
+    engine.progress(job, 95, f"{len(queued)} PKG(s) queued on PS4")
+    return ok(
+        f"{len(queued)} PKG(s) added to the iNSync Companion install queue",
+        console="playstation",
+        ip=ip,
+        mode="insync-companion",
+        install_started=True,
+        package_server=server,
+        packages=queued,
+        items=list(queue_data.get("items") or []),
+    )
 
 
 OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
@@ -3888,6 +4221,11 @@ OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
     "ios.documents.delete": ios_documents_delete_job,
     "console.status": console_status_job,
     "console.pkg": console_pkg_job,
+    "console.companion.install": console_companion_install_job,
+    "console.companion.pair": console_companion_pair_job,
+    "console.companion.queue": console_companion_queue_job,
+    "console.companion.games": console_companion_games_job,
+    "console.companion.action": console_companion_action_job,
 }
 
 
@@ -3919,7 +4257,7 @@ def snapshot() -> dict[str, Any]:
             "ipa_validation": True,
             "peer_discovery": True,
             "peer_roles": True,
-            "console_pkg": "playstation-rpi-or-goldhen-ftp",
+            "console_pkg": "playstation-insync-companion",
             "clipboard_peer": True,
         },
     )

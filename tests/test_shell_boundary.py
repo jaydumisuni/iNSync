@@ -539,26 +539,52 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertGreaterEqual(renderer.count('class="get mini" data-cmd="appGet"'), 2)
         self.assertIn('submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},currentModule==="android"?"android":"apk")', renderer)
 
-    def test_playstation_pkg_backend_uses_rpi_with_goldhen_ftp_fallback(self):
+    def test_playstation_pkg_backend_prefers_insync_companion_with_bootstrap_fallbacks(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         for token in (
-            'PS4_FTP_PORT = int(os.environ.get("INSYNC_PS4_FTP_PORT", "2121"))',
-            'PS4_RPI_PORT = int(os.environ.get("INSYNC_PS4_RPI_PORT", "12800"))',
-            'PS4_PACKAGE_HTTP_PORT = int(os.environ.get("INSYNC_PS4_HTTP_PORT", "8337"))',
-            'def _ps4_discover_ip() -> str:',
-            'def _ps4_ftp_stage_packages(',
-            'def _ps4_package_server(paths: list[Path], ps4_ip: str)',
-            '"/api/install", {"type": "direct", "packages": urls}',
-            '"install_started": False' if False else 'install_started=False',
-            '"console_pkg": "playstation-rpi-or-goldhen-ftp"',
+            'PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "49560"))',
+            'def _bundled_ps4_companion_pkg() -> Path | None:',
+            'def _ps4_companion_request(',
+            'def console_companion_install_job(',
+            'def console_companion_pair_job(',
+            '"console.companion.queue": console_companion_queue_job',
+            '"console.companion.games": console_companion_games_job',
+            '"console.companion.action": console_companion_action_job',
+            '"console_pkg": "playstation-insync-companion"',
         ):
             self.assertIn(token, backend)
         for token in (
-            'data-ext="\'+extensions.join(\",\")+\'"',
-            'submit("console.pkg",{console:key,paths:data[key].paths},key)',
+            'data-cmd="consoleCompanionInstall"',
+            'data-cmd="consoleCompanionPair"',
+            'data-cmd="consoleQueueAction"',
+            'Installed games',
+            'Add to install queue',
         ):
             self.assertIn(token, renderer)
+
+    def test_ps4_companion_uses_64_bit_bgft_abi_and_shared_queue_controls(self):
+        source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
+        for token in (
+            'static_assert(sizeof(unsigned long) == 8',
+            'unsigned long packageSize;',
+            'unsigned long lengthTotal;',
+            'unsigned long transferredTotal;',
+            'p.packageSize = static_cast<unsigned long>(q.size);',
+            'sceBgftServiceDownloadPauseTask',
+            'sceBgftServiceDownloadResumeTask',
+            'sceBgftServiceDownloadStopTask',
+            'ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL',
+            'ORBIS_SYSMODULE_INTERNAL_BGFT',
+            '"/v1/queue/add"',
+            'action == "top"',
+        ):
+            self.assertIn(token, source)
+
+    def test_ps4_companion_artifact_is_bundled(self):
+        pkg = ROOT / "resources" / "ps4" / "iNSync-Companion.pkg"
+        self.assertTrue(pkg.is_file())
+        self.assertGreater(pkg.stat().st_size, 1024 * 1024)
 
     def test_playstation_pkg_fallback_sets_goldhen_hdd_package_source(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
