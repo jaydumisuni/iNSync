@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import base64
 import ctypes
+from ftplib import FTP
 import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
+import ipaddress
 import json
 import os
 import plistlib
@@ -23,6 +27,9 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+from urllib.parse import quote, unquote, urlparse
 
 STDOUT_LOCK = threading.Lock()
 JOBS_LOCK = threading.RLock()
@@ -3294,17 +3301,543 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
         "backend": "ideviceinstaller",
     }
 
+PS4_FTP_PORT = int(os.environ.get("INSYNC_PS4_FTP_PORT", "2121"))
+PS4_RPI_PORT = int(os.environ.get("INSYNC_PS4_RPI_PORT", "12800"))
+PS4_BINLOADER_PORT = int(os.environ.get("INSYNC_PS4_BINLOADER_PORT", "9090"))
+PS4_KLOG_PORT = int(os.environ.get("INSYNC_PS4_KLOG_PORT", "3232"))
+PS4_PACKAGE_HTTP_PORT = int(os.environ.get("INSYNC_PS4_HTTP_PORT", "8337"))
+PS4_DISCOVERY_LOCK = threading.RLock()
+PS4_SERVER_LOCK = threading.RLock()
+PS4_PACKAGE_ROUTES: dict[str, Path] = {}
+PS4_PACKAGE_SERVER: ThreadingHTTPServer | None = None
+PS4_PACKAGE_SERVER_THREAD: threading.Thread | None = None
+PS4_LAST_IP = ""
+
+
+def _ps4_state_path() -> Path:
+    base = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "iNSync"
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "ps4.json"
+
+
+def _ps4_load_saved_ip() -> str:
+    try:
+        payload = json.loads(_ps4_state_path().read_text(encoding="utf-8"))
+        value = str(payload.get("ip") or "").strip()
+        ipaddress.ip_address(value)
+        return value
+    except Exception:
+        return ""
+
+
+def _ps4_save_ip(ip: str) -> None:
+    try:
+        _ps4_state_path().write_text(
+            json.dumps({"ip": ip, "updated_at": time.time()}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _tcp_open(host: str, port: int, timeout: float = 0.45) -> bool:
+    try:
+        with socket.create_connection((host, int(port)), timeout=max(0.05, float(timeout))):
+            return True
+    except OSError:
+        return False
+
+
+def _ps4_ftp_banner(ip: str, timeout: float = 0.65) -> str:
+    ftp = FTP()
+    try:
+        ftp.connect(ip, PS4_FTP_PORT, timeout=timeout)
+        return str(ftp.getwelcome() or "")
+    except Exception:
+        return ""
+    finally:
+        try:
+            ftp.close()
+        except Exception:
+            pass
+
+
+def _ps4_arp_candidates() -> list[str]:
+    candidates: list[str] = []
+    try:
+        cp = subprocess.run(
+            ["arp", "-a"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+        for match in re.finditer(r"(?m)^\s*(\d+\.\d+\.\d+\.\d+)\s+", cp.stdout or ""):
+            value = match.group(1)
+            try:
+                addr = ipaddress.ip_address(value)
+                if addr.is_private:
+                    candidates.append(value)
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return list(dict.fromkeys(candidates))
+
+
+def _ps4_local_ipv4s() -> list[str]:
+    values: list[str] = []
+    try:
+        cp = subprocess.run(
+            ["ipconfig"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=8,
+        )
+        for value in re.findall(r"IPv4[^:]*:\s*(\d+\.\d+\.\d+\.\d+)", cp.stdout or "", flags=re.I):
+            try:
+                addr = ipaddress.ip_address(value)
+                if addr.is_private and not addr.is_loopback:
+                    values.append(value)
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return list(dict.fromkeys(values))
+
+
+def _ps4_discover_ip() -> str:
+    global PS4_LAST_IP
+    with PS4_DISCOVERY_LOCK:
+        preferred = [
+            str(os.environ.get("INSYNC_PS4_IP") or "").strip(),
+            PS4_LAST_IP,
+            _ps4_load_saved_ip(),
+            *_ps4_arp_candidates(),
+        ]
+        for candidate in dict.fromkeys(x for x in preferred if x):
+            if "GoldHEN FTP" in _ps4_ftp_banner(candidate):
+                PS4_LAST_IP = candidate
+                _ps4_save_ip(candidate)
+                return candidate
+
+        # Bounded fallback: scan each private local /24 for a GoldHEN FTP banner.
+        networks: list[ipaddress.IPv4Network] = []
+        for local_ip in _ps4_local_ipv4s():
+            try:
+                networks.append(ipaddress.ip_network(local_ip + "/24", strict=False))
+            except ValueError:
+                pass
+        hosts: list[str] = []
+        for network in networks:
+            hosts.extend(str(host) for host in network.hosts())
+        hosts = list(dict.fromkeys(hosts))[:1024]
+        if not hosts:
+            return ""
+
+        def probe(candidate: str) -> str:
+            return candidate if "GoldHEN FTP" in _ps4_ftp_banner(candidate, timeout=0.16) else ""
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=96) as pool:
+            for result in pool.map(probe, hosts, chunksize=8):
+                if result:
+                    PS4_LAST_IP = result
+                    _ps4_save_ip(result)
+                    return result
+        return ""
+
+
+def _ps4_ftp_connect(ip: str, timeout: float = 12.0) -> FTP:
+    ftp = FTP()
+    ftp.connect(ip, PS4_FTP_PORT, timeout=timeout)
+    banner = str(ftp.getwelcome() or "")
+    if "GoldHEN FTP" not in banner:
+        ftp.close()
+        raise RuntimeError(f"Unexpected FTP service on {ip}:{PS4_FTP_PORT}: {banner}")
+    try:
+        ftp.login()
+    except Exception:
+        ftp.login("anonymous", "")
+    return ftp
+
+
+def _ps4_goldhen_config_hdd(ftp: FTP) -> dict[str, Any]:
+    from io import BytesIO
+
+    buf = BytesIO()
+    ftp.retrbinary("RETR /data/GoldHEN/config.ini", buf.write)
+    original = buf.getvalue()
+    text = original.decode("utf-8", "replace")
+    updated = re.sub(r"(?m)^Pkg_Source\s*=\s*\d+\s*$", "Pkg_Source = 1", text)
+    changed = updated != text
+    if changed:
+        ftp.storbinary("STOR /data/GoldHEN/config.ini", BytesIO(updated.encode("utf-8")))
+    return {
+        "changed": changed,
+        "pkg_source_hdd": bool(re.search(r"(?m)^Pkg_Source\s*=\s*1\s*$", updated)),
+        "bgft_enabled": (
+            re.search(r"(?m)^Bgft_Enabled\s*=\s*(\d+)", updated).group(1)
+            if re.search(r"(?m)^Bgft_Enabled\s*=\s*(\d+)", updated)
+            else None
+        ),
+    }
+
+
+def _ps4_ftp_stage_packages(
+    ip: str,
+    paths: list[Path],
+    job: Job | None = None,
+    engine: JobEngine | None = None,
+) -> dict[str, Any]:
+    total = sum(path.stat().st_size for path in paths)
+    transferred = 0
+    staged: list[dict[str, Any]] = []
+    ftp = _ps4_ftp_connect(ip, timeout=15)
+    try:
+        try:
+            ftp.mkd("/data/pkg")
+        except Exception:
+            pass
+        config = _ps4_goldhen_config_hdd(ftp)
+        for index, path in enumerate(paths, start=1):
+            if job and job.cancel.is_set():
+                raise Cancelled()
+            remote = "/data/pkg/" + path.name
+            existing = None
+            try:
+                existing = ftp.size(remote)
+            except Exception:
+                pass
+            if existing == path.stat().st_size:
+                transferred += path.stat().st_size
+                staged.append(
+                    {
+                        "name": path.name,
+                        "local_path": str(path),
+                        "remote_path": remote,
+                        "size": path.stat().st_size,
+                        "skipped_existing": True,
+                    }
+                )
+                if engine and job:
+                    engine.progress(job, max(15.0, 90 * transferred / max(1, total)), f"Already staged: {path.name}")
+                continue
+
+            sent_this_file = 0
+
+            def on_block(block: bytes) -> None:
+                nonlocal transferred, sent_this_file
+                if job and job.cancel.is_set():
+                    raise Cancelled()
+                size = len(block)
+                transferred += size
+                sent_this_file += size
+                if engine and job:
+                    engine.progress(
+                        job,
+                        max(15.0, min(90.0, 90.0 * transferred / max(1, total))),
+                        f"Sending {index}/{len(paths)} to PS4: {path.name}",
+                    )
+
+            with path.open("rb") as handle:
+                ftp.storbinary("STOR " + remote, handle, blocksize=1024 * 1024, callback=on_block)
+            remote_size = ftp.size(remote)
+            if remote_size != path.stat().st_size:
+                raise IOError(f"PS4 FTP size mismatch for {path.name}: {remote_size} != {path.stat().st_size}")
+            staged.append(
+                {
+                    "name": path.name,
+                    "local_path": str(path),
+                    "remote_path": remote,
+                    "size": path.stat().st_size,
+                    "skipped_existing": False,
+                }
+            )
+        return {"config": config, "packages": staged}
+    finally:
+        try:
+            ftp.quit()
+        except Exception:
+            try:
+                ftp.close()
+            except Exception:
+                pass
+
+
+class _PS4PackageRequestHandler(BaseHTTPRequestHandler):
+    server_version = "iNSync-PS4-PKG/1.0"
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        return
+
+    def _resolve(self) -> Path | None:
+        parsed = urlparse(self.path)
+        with PS4_SERVER_LOCK:
+            path = PS4_PACKAGE_ROUTES.get(parsed.path)
+        return path if path and path.is_file() else None
+
+    def _send_file(self, head_only: bool = False) -> None:
+        path = self._resolve()
+        if not path:
+            self.send_error(404)
+            return
+        size = path.stat().st_size
+        start = 0
+        end = size - 1
+        status = 200
+        range_header = str(self.headers.get("Range") or "")
+        match = re.match(r"bytes=(\d*)-(\d*)", range_header)
+        if match:
+            if match.group(1):
+                start = int(match.group(1))
+            if match.group(2):
+                end = min(end, int(match.group(2)))
+            if start >= size or end < start:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            status = 206
+        length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if head_only:
+            return
+        with path.open("rb") as handle:
+            handle.seek(start)
+            remaining = length
+            while remaining > 0:
+                block = handle.read(min(1024 * 1024, remaining))
+                if not block:
+                    break
+                self.wfile.write(block)
+                remaining -= len(block)
+
+    def do_GET(self) -> None:
+        self._send_file(False)
+
+    def do_HEAD(self) -> None:
+        self._send_file(True)
+
+
+def _ps4_local_ip_for_remote(remote_ip: str) -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect((remote_ip, PS4_FTP_PORT))
+        return str(sock.getsockname()[0])
+    finally:
+        sock.close()
+
+
+def _ps4_package_server(paths: list[Path], ps4_ip: str) -> tuple[str, list[str]]:
+    global PS4_PACKAGE_SERVER, PS4_PACKAGE_SERVER_THREAD
+    with PS4_SERVER_LOCK:
+        if PS4_PACKAGE_SERVER is None:
+            ports = [PS4_PACKAGE_HTTP_PORT, 0] if PS4_PACKAGE_HTTP_PORT else [0]
+            last_error: Exception | None = None
+            for port in ports:
+                try:
+                    server = ThreadingHTTPServer(("0.0.0.0", int(port)), _PS4PackageRequestHandler)
+                    server.daemon_threads = True
+                    PS4_PACKAGE_SERVER = server
+                    PS4_PACKAGE_SERVER_THREAD = threading.Thread(
+                        target=server.serve_forever,
+                        name="insync-ps4-pkg-http",
+                        daemon=True,
+                    )
+                    PS4_PACKAGE_SERVER_THREAD.start()
+                    break
+                except OSError as exc:
+                    last_error = exc
+            if PS4_PACKAGE_SERVER is None:
+                raise RuntimeError(f"Could not start PS4 package HTTP server: {last_error}")
+        port = int(PS4_PACKAGE_SERVER.server_address[1])
+        local_ip = _ps4_local_ip_for_remote(ps4_ip)
+        urls: list[str] = []
+        for path in paths:
+            token = uuid.uuid4().hex
+            route = f"/pkg/{token}/{quote(path.name)}"
+            PS4_PACKAGE_ROUTES[route] = path
+            urls.append(f"http://{local_ip}:{port}{route}")
+        return f"{local_ip}:{port}", urls
+
+
+def _ps4_rpi_request(ip: str, endpoint: str, payload: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
+    data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    req = urllib_request.Request(
+        f"http://{ip}:{PS4_RPI_PORT}{endpoint}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", "replace")
+            try:
+                decoded = json.loads(raw)
+                if isinstance(decoded, dict):
+                    return decoded
+                return {"response": decoded}
+            except json.JSONDecodeError:
+                return {"response": raw, "http_status": getattr(response, "status", 200)}
+    except urllib_error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")
+        raise RuntimeError(f"RPI HTTP {exc.code}: {body}") from exc
+    except OSError as exc:
+        raise RuntimeError(f"RPI request failed: {exc}") from exc
+
+
+def _ps4_find_task_id(payload: Any) -> int | None:
+    if isinstance(payload, dict):
+        for key in ("task_id", "taskId", "id"):
+            value = payload.get(key)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+        for value in payload.values():
+            task_id = _ps4_find_task_id(value)
+            if task_id is not None:
+                return task_id
+    if isinstance(payload, list):
+        for value in payload:
+            task_id = _ps4_find_task_id(value)
+            if task_id is not None:
+                return task_id
+    return None
+
+
+def _ps4_status_data() -> dict[str, Any]:
+    ip = _ps4_discover_ip()
+    if not ip:
+        return unavailable("No GoldHEN PS4 found on the local network", console="playstation")
+    ftp_ready = "GoldHEN FTP" in _ps4_ftp_banner(ip)
+    rpi_ready = _tcp_open(ip, PS4_RPI_PORT, 0.4)
+    binloader_ready = _tcp_open(ip, PS4_BINLOADER_PORT, 0.4)
+    klog_ready = _tcp_open(ip, PS4_KLOG_PORT, 0.4)
+    staged: list[dict[str, Any]] = []
+    if ftp_ready:
+        try:
+            ftp = _ps4_ftp_connect(ip, timeout=4)
+            try:
+                for name, facts in ftp.mlsd("/data/pkg"):
+                    if name in (".", "..") or facts.get("type") != "file":
+                        continue
+                    if str(name).lower().endswith(".pkg"):
+                        staged.append({"name": name, "size": int(facts.get("size") or 0)})
+            finally:
+                try:
+                    ftp.quit()
+                except Exception:
+                    ftp.close()
+        except Exception:
+            pass
+    if rpi_ready:
+        message = f"PS4 {ip} ready — Remote Package Installer is listening on {PS4_RPI_PORT}"
+        mode = "rpi"
+    elif ftp_ready:
+        message = f"PS4 {ip} ready over GoldHEN FTP — PKGs can be staged to /data/pkg; RPI is not active"
+        mode = "goldhen-ftp"
+    else:
+        message = f"PS4 {ip} detected but package transport is unavailable"
+        mode = "unavailable"
+    return ok(
+        message,
+        console="playstation",
+        ip=ip,
+        mode=mode,
+        ftp_ready=ftp_ready,
+        ftp_port=PS4_FTP_PORT,
+        rpi_ready=rpi_ready,
+        rpi_port=PS4_RPI_PORT,
+        binloader_ready=binloader_ready,
+        binloader_port=PS4_BINLOADER_PORT,
+        klog_ready=klog_ready,
+        klog_port=PS4_KLOG_PORT,
+        staged_packages=staged,
+        staged_count=len(staged),
+    )
+
+
 def console_status_job(job: Job, engine: JobEngine) -> dict[str, Any]:
-    console = str(job.params.get("console") or "console")
-    return unavailable(f"{console} adapter is not qualified yet", console=console)
+    console = str(job.params.get("console") or "console").strip().lower()
+    if console != "playstation":
+        return unavailable(f"{console} adapter is not qualified yet", console=console)
+    engine.progress(job, 15, "Finding GoldHEN PS4")
+    result = _ps4_status_data()
+    engine.progress(job, 85, str(result.get("message") or "PS4 status ready"))
+    return result
 
 
 def console_pkg_job(job: Job, engine: JobEngine) -> dict[str, Any]:
-    paths = [str(x) for x in (job.params.get("paths") or [])]
-    console = str(job.params.get("console") or "PlayStation")
-    if not paths:
-        return unavailable("Choose one or more package files")
-    return unavailable(f"{console} package backend is not qualified yet", console=console, packages=paths)
+    console = str(job.params.get("console") or "playstation").strip().lower()
+    if console != "playstation":
+        return unavailable(f"{console} package backend is not qualified yet", console=console)
+    raw_paths = [str(x) for x in (job.params.get("paths") or []) if str(x or "").strip()]
+    if not raw_paths:
+        return unavailable("Choose one or more PS4 PKG files")
+    paths = [Path(value) for value in raw_paths]
+    invalid = [str(path) for path in paths if not path.is_file() or path.suffix.lower() != ".pkg"]
+    if invalid:
+        return unavailable("One or more selected PS4 packages are unavailable or not .pkg files", invalid=invalid)
+
+    engine.progress(job, 8, "Finding GoldHEN PS4")
+    status = _ps4_status_data()
+    if not status.get("ok"):
+        return status
+    ip = str(status.get("ip") or "")
+    if status.get("rpi_ready"):
+        engine.progress(job, 20, "Starting local PKG server")
+        server, urls = _ps4_package_server(paths, ip)
+        # Local proof that every generated URL resolves before telling the PS4.
+        for url, path in zip(urls, paths):
+            req = urllib_request.Request(url, method="HEAD")
+            with urllib_request.urlopen(req, timeout=4) as response:
+                if int(response.headers.get("Content-Length") or -1) != path.stat().st_size:
+                    raise IOError(f"Local package server size mismatch for {path.name}")
+        engine.progress(job, 45, "Sending install request to PS4")
+        response = _ps4_rpi_request(ip, "/api/install", {"type": "direct", "packages": urls}, timeout=10)
+        task_id = _ps4_find_task_id(response)
+        engine.progress(job, 92, "PS4 accepted install request")
+        return ok(
+            f"PS4 install started for {len(paths)} PKG(s)",
+            console="playstation",
+            ip=ip,
+            mode="rpi",
+            install_started=True,
+            task_id=task_id,
+            rpi_response=response,
+            package_server=server,
+            packages=[
+                {"name": path.name, "path": str(path), "size": path.stat().st_size, "url": url}
+                for path, url in zip(paths, urls)
+            ],
+        )
+
+    if status.get("ftp_ready"):
+        engine.progress(job, 15, "RPI is not active; staging PKGs through GoldHEN FTP")
+        staged = _ps4_ftp_stage_packages(ip, paths, job, engine)
+        engine.progress(job, 95, "PKGs staged to /data/pkg")
+        return ok(
+            f"{len(paths)} PKG(s) staged to /data/pkg; start GoldHEN Package Installer to install them",
+            console="playstation",
+            ip=ip,
+            mode="goldhen-ftp",
+            install_started=False,
+            requires_rpi=True,
+            package_source="/data/pkg",
+            **staged,
+        )
+    return unavailable("PS4 is reachable but no supported package transport is active", console="playstation", ip=ip)
 
 
 OPERATIONS: dict[str, Callable[[Job, JobEngine], dict[str, Any]]] = {
@@ -3386,7 +3919,7 @@ def snapshot() -> dict[str, Any]:
             "ipa_validation": True,
             "peer_discovery": True,
             "peer_roles": True,
-            "console_pkg": "adapter-pending",
+            "console_pkg": "playstation-rpi-or-goldhen-ftp",
             "clipboard_peer": True,
         },
     )

@@ -539,6 +539,47 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertGreaterEqual(renderer.count('class="get mini" data-cmd="appGet"'), 2)
         self.assertIn('submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},currentModule==="android"?"android":"apk")', renderer)
 
+    def test_playstation_pkg_backend_uses_rpi_with_goldhen_ftp_fallback(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            'PS4_FTP_PORT = int(os.environ.get("INSYNC_PS4_FTP_PORT", "2121"))',
+            'PS4_RPI_PORT = int(os.environ.get("INSYNC_PS4_RPI_PORT", "12800"))',
+            'PS4_PACKAGE_HTTP_PORT = int(os.environ.get("INSYNC_PS4_HTTP_PORT", "8337"))',
+            'def _ps4_discover_ip() -> str:',
+            'def _ps4_ftp_stage_packages(',
+            'def _ps4_package_server(paths: list[Path], ps4_ip: str)',
+            '"/api/install", {"type": "direct", "packages": urls}',
+            '"install_started": False' if False else 'install_started=False',
+            '"console_pkg": "playstation-rpi-or-goldhen-ftp"',
+        ):
+            self.assertIn(token, backend)
+        for token in (
+            'data-ext="\'+extensions.join(\",\")+\'"',
+            'submit("console.pkg",{console:key,paths:data[key].paths},key)',
+        ):
+            self.assertIn(token, renderer)
+
+    def test_playstation_pkg_fallback_sets_goldhen_hdd_package_source(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            're.sub(r"(?m)^Pkg_Source\\s*=\\s*\\d+\\s*$", "Pkg_Source = 1", text)',
+            'ftp.mkd("/data/pkg")',
+            'remote = "/data/pkg/" + path.name',
+            'PS4 FTP size mismatch',
+        ):
+            self.assertIn(token, backend)
+
+    def test_rpi_package_server_supports_ranges(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'self.send_header("Accept-Ranges", "bytes")',
+            'self.send_header("Content-Range", f"bytes {start}-{end}/{size}")',
+            'status = 206',
+            'ThreadingHTTPServer(("0.0.0.0", int(port)), _PS4PackageRequestHandler)',
+        ):
+            self.assertIn(token, backend)
+
     def test_every_rendered_main_command_has_a_handler(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         commands = set(re.findall(r'data-cmd=["\']([^"\']+)', renderer))
