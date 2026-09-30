@@ -18,7 +18,6 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -330,12 +329,15 @@ static QueueItem* find_item_locked(uint64_t id) {
 }
 
 static bool start_head_locked() {
-    if (!install_engine_init_once()) return false;
+    bool has_queued = false;
     for (auto& q : g_queue) {
         if (q.state == QueueState::Active || q.state == QueueState::Starting || q.state == QueueState::Paused) {
             return true;
         }
+        if (q.state == QueueState::Queued) has_queued = true;
     }
+    if (!has_queued) return true;
+    if (!install_engine_init_once()) return false;
     for (auto& q : g_queue) {
         if (q.state != QueueState::Queued) continue;
         q.state = QueueState::Starting;
@@ -791,22 +793,30 @@ static void handle_client(int fd) {
 }
 
 static void* http_server(void*) {
+    startup_log("http: thread_enter");
     int s = socket(AF_INET, SOCK_STREAM, 0);
+    startup_log("http: socket=%d errno=%d", s, errno);
     if (s < 0) return nullptr;
     int one = 1;
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    int so_ret = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    startup_log("http: setsockopt=%d errno=%d", so_ret, errno);
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(kPort);
-    if (bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    int bind_ret = bind(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    startup_log("http: bind=%d errno=%d port=%d", bind_ret, errno, kPort);
+    if (bind_ret != 0) {
         close(s);
         return nullptr;
     }
-    if (listen(s, 8) != 0) {
+    int listen_ret = listen(s, 8);
+    startup_log("http: listen=%d errno=%d", listen_ret, errno);
+    if (listen_ret != 0) {
         close(s);
         return nullptr;
     }
+    startup_log("http: ready");
     while (g_running) {
         sockaddr_in peer{};
         socklen_t n = sizeof(peer);
@@ -883,6 +893,83 @@ static void fill(SDL_Renderer* r, int x, int y, int w, int h, Uint8 rr, Uint8 gg
     SDL_RenderFillRect(r,&rc);
 }
 
+
+static void rounded_fill(SDL_Renderer* r, int x, int y, int w, int h, int radius,
+                         Uint8 rr, Uint8 gg, Uint8 bb, Uint8 aa=255) {
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r,rr,gg,bb,aa);
+    if (radius < 1) {
+        SDL_Rect rc{x,y,w,h};
+        SDL_RenderFillRect(r,&rc);
+        return;
+    }
+    if (radius * 2 > w) radius = w / 2;
+    if (radius * 2 > h) radius = h / 2;
+    SDL_Rect core{x, y + radius, w, h - 2 * radius};
+    SDL_RenderFillRect(r,&core);
+    for (int i=0;i<radius;++i) {
+        int inset = (radius - i) * (radius - i) / (radius > 0 ? radius : 1);
+        if (inset > radius) inset = radius;
+        SDL_RenderDrawLine(r,x+inset,y+i,x+w-inset-1,y+i);
+        SDL_RenderDrawLine(r,x+inset,y+h-i-1,x+w-inset-1,y+h-i-1);
+    }
+}
+
+static void rounded_outline(SDL_Renderer* r, int x, int y, int w, int h, int radius,
+                            Uint8 rr, Uint8 gg, Uint8 bb, Uint8 aa=255) {
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r,rr,gg,bb,aa);
+    if (radius < 1) {
+        SDL_Rect rc{x,y,w,h};
+        SDL_RenderDrawRect(r,&rc);
+        return;
+    }
+    SDL_RenderDrawLine(r,x+radius,y,x+w-radius-1,y);
+    SDL_RenderDrawLine(r,x+radius,y+h-1,x+w-radius-1,y+h-1);
+    SDL_RenderDrawLine(r,x,y+radius,x,y+h-radius-1);
+    SDL_RenderDrawLine(r,x+w-1,y+radius,x+w-1,y+h-radius-1);
+    for (int i=0;i<radius;++i) {
+        int inset = (radius - i) * (radius - i) / (radius > 0 ? radius : 1);
+        if (inset > radius) inset = radius;
+        SDL_RenderDrawPoint(r,x+inset,y+i);
+        SDL_RenderDrawPoint(r,x+w-inset-1,y+i);
+        SDL_RenderDrawPoint(r,x+inset,y+h-i-1);
+        SDL_RenderDrawPoint(r,x+w-inset-1,y+h-i-1);
+    }
+}
+
+static void glass_card(SDL_Renderer* r, int x, int y, int w, int h, bool selected=false) {
+    rounded_fill(r,x,y,w,h,24,13,20,36,225);
+    rounded_outline(r,x,y,w,h,24,selected?73:52,selected?201:108,selected?255:180,selected?210:92);
+    if (selected) rounded_fill(r,x+2,y+2,5,h-4,3,35,223,255,220);
+}
+
+static void pill(SDL_Renderer* r, int x, int y, int w, const std::string& text, bool good=false, bool accent=false) {
+    Uint8 rr=24,gg=36,bb=58;
+    Uint8 br=70,bg=120,bl=170;
+    SDL_Color tc{195,215,235,255};
+    if (good) { rr=18;gg=60;bb=45;br=66;bg=247;bl=157;tc=SDL_Color{184,255,211,255}; }
+    if (accent) { rr=20;gg=50;bb=78;br=35;bg=223;bl=255;tc=SDL_Color{210,248,255,255}; }
+    rounded_fill(r,x,y,w,38,19,rr,gg,bb,220);
+    rounded_outline(r,x,y,w,38,19,br,bg,bl,120);
+    draw_text(r,x+18,y+7,text,18,tc);
+}
+
+static void draw_background(SDL_Renderer* r) {
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    for (int y=0;y<kFrameH;y+=4) {
+        double t=static_cast<double>(y)/kFrameH;
+        Uint8 rr=static_cast<Uint8>(6 + 5*t);
+        Uint8 gg=static_cast<Uint8>(10 + 8*t);
+        Uint8 bb=static_cast<Uint8>(21 + 13*t);
+        fill(r,0,y,kFrameW,4,rr,gg,bb,255);
+    }
+    rounded_fill(r,1450,-120,520,360,180,31,112,255,18);
+    rounded_fill(r,1270,710,650,420,190,122,62,255,14);
+    rounded_fill(r,-120,760,500,360,170,22,210,255,12);
+    fill(r,0,0,kFrameW,3,32,220,255,200);
+}
+
 static int init_pad() {
     OrbisUserServiceInitializeParams p{};
     p.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST;
@@ -893,63 +980,128 @@ static int init_pad() {
 }
 
 static void render_ui(SDL_Renderer* r, int page, int selected) {
-    SDL_SetRenderDrawColor(r, 10, 12, 18, 255);
-    SDL_RenderClear(r);
-    fill(r,0,0,kFrameW,110,22,26,37);
-    draw_text(r,70,25,"iNSync Companion",48);
-    draw_text(r,70,78,"THETECHGUY | PS4 package manager",24,SDL_Color{155,165,180,255});
+    draw_background(r);
+
+    // Header
+    draw_text(r,64,36,"iNSync",52,SDL_Color{238,249,255,255});
+    draw_text(r,250,45,"COMPANION",21,SDL_Color{105,210,255,255});
+    draw_text(r,66,95,"PlayStation package manager",22,SDL_Color{147,171,198,255});
 
     pthread_mutex_lock(&g_lock);
-    std::string pair_line = g_pair.waiting && !g_pair.approved
-        ? ("PAIR REQUEST: " + g_pair.client + "   [X] Approve")
-        : (g_pair.approved ? "Paired with iNSync" : "Waiting for iNSync pair request");
-    draw_text(r,1120,40,pair_line,24,g_pair.waiting && !g_pair.approved
-              ? SDL_Color{255,210,100,255}:SDL_Color{130,220,165,255});
+    bool pair_waiting = g_pair.waiting && !g_pair.approved;
+    bool paired = g_pair.approved;
+    std::string client = g_pair.client;
+    size_t queue_count = g_queue.size();
+    size_t game_count = g_games.size();
+    pthread_mutex_unlock(&g_lock);
 
-    draw_text(r,70,145,page==0?"QUEUE":"INSTALLED GAMES",34);
-    draw_text(r,70,195,page==0
-              ? "[UP/DOWN] Select   [TRIANGLE] Pause/Resume   [SQUARE] Top   [CIRCLE] Cancel   [R1] Games"
-              : "[UP/DOWN] Scroll   [L1] Queue",22,SDL_Color{145,155,175,255});
+    pill(r,1515,46,160,paired?"CONNECTED":"LOCAL",paired,false);
+    pill(r,1688,46,166,"API :49560",false,true);
 
+    // Tabs
+    int tab_y=146;
+    glass_card(r,64,tab_y,250,64,page==0);
+    draw_text(r,92,162,"INSTALL QUEUE",23,page==0?SDL_Color{225,250,255,255}:SDL_Color{140,162,188,255});
+    char qcount[32]; snprintf(qcount,sizeof(qcount),"%zu",queue_count);
+    pill(r,248,159,48,qcount,false,page==0);
+
+    glass_card(r,328,tab_y,250,64,page==1);
+    draw_text(r,356,162,"LIBRARY",23,page==1?SDL_Color{225,250,255,255}:SDL_Color{140,162,188,255});
+    char gcount[32]; snprintf(gcount,sizeof(gcount),"%zu",game_count);
+    pill(r,512,159,48,gcount,false,page==1);
+
+    // Main list panel
+    const int panel_x=64,panel_y=232,panel_w=1240,panel_h=760;
+    glass_card(r,panel_x,panel_y,panel_w,panel_h,false);
+
+    // Right status column
+    const int side_x=1330,side_w=526;
+    glass_card(r,side_x,232,side_w,244,false);
+    draw_text(r,1362,258,"CONNECTION",19,SDL_Color{113,201,255,255});
+    draw_text(r,1362,298,paired?"Paired with iNSync":"Waiting for iNSync",30,SDL_Color{239,248,255,255});
+    draw_text(r,1362,340,paired?"PC and console share one install queue.":"Open iNSync on PC and choose Pair.",20,SDL_Color{148,170,195,255});
+    pill(r,1362,392,paired?130:150,paired?"READY":"NOT PAIRED",paired,false);
+
+    glass_card(r,side_x,498,side_w,236,false);
+    draw_text(r,1362,524,"INSTALL ENGINE",19,SDL_Color{113,201,255,255});
+    draw_text(r,1362,562,g_bgft_ready?"Ready":"Idle until first install",28,SDL_Color{239,248,255,255});
+    draw_text(r,1362,604,"BGFT starts only when a package reaches",19,SDL_Color{148,170,195,255});
+    draw_text(r,1362,632,"the head of the queue.",19,SDL_Color{148,170,195,255});
+    pill(r,1362,678,150,g_bgft_ready?"ACTIVE":"STANDBY",g_bgft_ready,false);
+
+    glass_card(r,side_x,756,side_w,236,false);
+    draw_text(r,1362,782,"CONTROLS",19,SDL_Color{113,201,255,255});
+    pill(r,1362,824,92,"UP/DN",false,false);
+    draw_text(r,1468,830,"Select",19,SDL_Color{205,220,236,255});
+    pill(r,1362,870,92,"SQUARE",false,false);
+    draw_text(r,1468,876,"Move to top",19,SDL_Color{205,220,236,255});
+    pill(r,1362,916,92,"TRI",false,false);
+    draw_text(r,1468,922,"Pause / Resume",19,SDL_Color{205,220,236,255});
+    pill(r,1640,916,92,"CIRCLE",false,false);
+    draw_text(r,1742,922,"Cancel",19,SDL_Color{205,220,236,255});
+
+    pthread_mutex_lock(&g_lock);
     if (page == 0) {
         if (g_queue.empty()) {
-            draw_text(r,70,300,"No packages queued.",32,SDL_Color{150,160,175,255});
+            draw_text(r,118,328,"Nothing queued",38,SDL_Color{231,244,255,255});
+            draw_text(r,118,382,"Send one or more PKG files from iNSync on your PC.",22,SDL_Color{143,166,194,255});
+            rounded_fill(r,118,446,440,82,20,11,27,49,210);
+            rounded_outline(r,118,446,440,82,20,45,170,255,100);
+            draw_text(r,148,466,"PC  ->  iNSync  ->  PS4",24,SDL_Color{184,232,255,255});
         } else {
-            int start = selected - 6; if (start < 0) start = 0;
-            int end = static_cast<int>(g_queue.size()); if (end > start + 12) end = start + 12;
-            for (int i = start; i < end; ++i) {
-                int y = 260 + (i-start)*64;
-                if (i == selected) fill(r,50,y-8,1820,56,35,42,58);
-                const auto& q = g_queue[i];
-                std::string left = q.name + "  [" + state_name(q.state) + "]";
-                draw_text(r,80,y,left,25);
-                char pct[24];
-                snprintf(pct, sizeof(pct), "%d%%", q.percent);
-                draw_text(r,1660,y,pct,25,q.state==QueueState::Error
-                          ? SDL_Color{255,110,110,255}:SDL_Color{130,220,165,255});
-                fill(r,1180,y+10,420,12,45,50,65);
-                int bw = q.percent*420/100; if (bw < 0) bw = 0; if (bw > 420) bw = 420;
-                fill(r,1180,y+10,bw,12,95,205,150);
+            int start_i=selected-4; if(start_i<0)start_i=0;
+            int end_i=static_cast<int>(g_queue.size()); if(end_i>start_i+8)end_i=start_i+8;
+            for(int i=start_i;i<end_i;++i){
+                int y=276+(i-start_i)*82;
+                bool sel=i==selected;
+                glass_card(r,96,y,1178,68,sel);
+                const auto& q=g_queue[i];
+                SDL_Color namec=sel?SDL_Color{245,252,255,255}:SDL_Color{213,228,242,255};
+                draw_text(r,124,y+12,q.name,23,namec);
+                draw_text(r,124,y+40,state_name(q.state),16,SDL_Color{132,157,185,255});
+                int pct=q.percent; if(pct<0)pct=0;if(pct>100)pct=100;
+                rounded_fill(r,730,y+28,350,10,5,30,40,58,255);
+                if(pct>0) rounded_fill(r,730,y+28,pct*350/100,10,5,35,223,255,255);
+                char pp[16];snprintf(pp,sizeof(pp),"%d%%",pct);
+                draw_text(r,1100,y+16,pp,20,q.state==QueueState::Error?SDL_Color{255,130,150,255}:SDL_Color{174,238,255,255});
             }
         }
     } else {
         if (g_games.empty()) {
-            draw_text(r,70,300,"No installed-game metadata found yet.",32,SDL_Color{150,160,175,255});
+            draw_text(r,118,328,"Library not loaded yet",38,SDL_Color{231,244,255,255});
+            draw_text(r,118,382,"Press R1 again or Refresh from the PC to scan installed titles.",22,SDL_Color{143,166,194,255});
         } else {
-            int start = selected - 6; if (start < 0) start = 0;
-            int end = static_cast<int>(g_games.size()); if (end > start + 12) end = start + 12;
-            for (int i = start; i < end; ++i) {
-                int y = 260 + (i-start)*64;
-                if (i == selected) fill(r,50,y-8,1820,56,35,42,58);
-                const auto& g = g_games[i];
-                draw_text(r,80,y,g.title,25);
-                draw_text(r,1290,y,g.title_id + "  v" + g.version,23,SDL_Color{155,165,180,255});
+            int start_i=selected-5; if(start_i<0)start_i=0;
+            int end_i=static_cast<int>(g_games.size()); if(end_i>start_i+9)end_i=start_i+9;
+            for(int i=start_i;i<end_i;++i){
+                int y=270+(i-start_i)*72;
+                bool sel=i==selected;
+                glass_card(r,96,y,1178,58,sel);
+                const auto& g=g_games[i];
+                draw_text(r,124,y+10,g.title,22,sel?SDL_Color{245,252,255,255}:SDL_Color{213,228,242,255});
+                draw_text(r,930,y+12,g.title_id,18,SDL_Color{130,160,190,255});
+                if(!g.version.empty()) draw_text(r,1110,y+12,"v"+g.version,18,SDL_Color{130,160,190,255});
             }
         }
     }
+
+    if (pair_waiting) {
+        // Pairing overlay
+        rounded_fill(r,0,0,kFrameW,kFrameH,0,0,0,0,120);
+        glass_card(r,520,330,880,410,true);
+        draw_text(r,584,382,"PAIR WITH iNSync",24,SDL_Color{91,218,255,255});
+        draw_text(r,584,430,client.empty()?"A PC is requesting access":client,38,SDL_Color{245,252,255,255});
+        draw_text(r,584,494,"Approve this PC to share the install queue and library.",22,SDL_Color{151,175,201,255});
+        rounded_fill(r,584,568,330,76,22,24,196,226,230);
+        draw_text(r,624,588,"X   APPROVE",26,SDL_Color{2,20,30,255});
+        rounded_fill(r,932,568,330,76,22,35,42,60,230);
+        draw_text(r,972,588,"O   LATER",26,SDL_Color{220,233,246,255});
+    }
     pthread_mutex_unlock(&g_lock);
 
-    draw_text(r,70,1010,"API 49560 | Shared queue: PC and console stay synchronized",22,SDL_Color{120,130,150,255});
+    // Footer
+    draw_text(r,66,1030,"L1 / R1  Switch view",18,SDL_Color{112,136,163,255});
+    draw_text(r,1620,1030,"iNSync Companion  v1.02",18,SDL_Color{112,136,163,255});
     SDL_RenderPresent(r);
 }
 

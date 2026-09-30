@@ -596,6 +596,26 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertNotIn('sceAppInstUtilInitialize()', source[main_pos:loop_pos])
         self.assertNotIn('sceBgftServiceIntInit', source[main_pos:loop_pos])
 
+    def test_ps4_companion_v102_ui_and_idle_engine_contract(self):
+        source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
+        makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
+        for token in (
+            'VERSION     := 1.02',
+        ):
+            self.assertIn(token, makefile)
+        for token in (
+            '"INSTALL QUEUE"',
+            '"LIBRARY"',
+            '"CONNECTION"',
+            '"INSTALL ENGINE"',
+            '"PAIR WITH iNSync"',
+            '"iNSync Companion  v1.02"',
+            'if (!has_queued) return true;',
+            'startup_log("http: ready")',
+            'startup_log("http: bind=%d errno=%d port=%d"',
+        ):
+            self.assertIn(token, source)
+
     def test_ps4_companion_artifact_is_bundled(self):
         pkg = ROOT / "resources" / "ps4" / "iNSync-Companion.pkg"
         self.assertTrue(pkg.is_file())
