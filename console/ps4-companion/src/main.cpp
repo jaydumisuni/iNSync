@@ -17,6 +17,8 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdarg.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -130,6 +132,22 @@ static uint64_t g_next_id = 1;
 static volatile bool g_running = true;
 static void* g_bgft_heap = nullptr;
 static bool g_bgft_ready = false;
+static bool g_appinst_ready = false;
+static bool g_install_modules_loaded = false;
+
+static void startup_log(const char* fmt, ...) {
+    mkdir("/data/iNSync", 0777);
+    FILE* f = fopen("/data/iNSync/startup.log", "a");
+    if (!f) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
+    fputc('\n', f);
+    fflush(f);
+    fclose(f);
+}
+
 static int g_user_id = -1;
 
 static std::string json_escape(const std::string& s) {
@@ -259,21 +277,50 @@ static void refresh_games() {
     pthread_mutex_unlock(&g_lock);
 }
 
-static bool bgft_init_once() {
-    if (g_bgft_ready) return true;
-    g_bgft_heap = malloc(kBgftHeapSize);
-    if (!g_bgft_heap) return false;
-    memset(g_bgft_heap, 0, kBgftHeapSize);
-    TtgBgftInitParams p{};
-    p.heap = g_bgft_heap;
-    p.heapSize = kBgftHeapSize;
-    int ret = sceBgftServiceIntInit(&p);
-    if (ret != 0) {
-        free(g_bgft_heap);
-        g_bgft_heap = nullptr;
-        return false;
+static bool install_engine_init_once() {
+    if (g_appinst_ready && g_bgft_ready) return true;
+    startup_log("install_engine: begin");
+
+    if (!g_install_modules_loaded) {
+        int app_mod = static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL));
+        startup_log("install_engine: appinst_module=0x%08X", app_mod);
+        if (app_mod < 0) return false;
+
+        int bgft_mod = static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT));
+        startup_log("install_engine: bgft_module=0x%08X", bgft_mod);
+        if (bgft_mod < 0) return false;
+        g_install_modules_loaded = true;
     }
-    g_bgft_ready = true;
+
+    if (!g_appinst_ready) {
+        int app_ret = sceAppInstUtilInitialize();
+        startup_log("install_engine: appinst_init=0x%08X", app_ret);
+        if (app_ret != 0) return false;
+        g_appinst_ready = true;
+    }
+
+    if (!g_bgft_ready) {
+        g_bgft_heap = malloc(kBgftHeapSize);
+        if (!g_bgft_heap) {
+            startup_log("install_engine: bgft_heap_alloc_failed");
+            return false;
+        }
+        memset(g_bgft_heap, 0, kBgftHeapSize);
+        TtgBgftInitParams p{};
+        p.heap = g_bgft_heap;
+        p.heapSize = kBgftHeapSize;
+        startup_log("install_engine: before_bgft_init");
+        int ret = sceBgftServiceIntInit(&p);
+        startup_log("install_engine: bgft_init=0x%08X", ret);
+        if (ret != 0) {
+            free(g_bgft_heap);
+            g_bgft_heap = nullptr;
+            return false;
+        }
+        g_bgft_ready = true;
+    }
+
+    startup_log("install_engine: ready");
     return true;
 }
 
@@ -283,7 +330,7 @@ static QueueItem* find_item_locked(uint64_t id) {
 }
 
 static bool start_head_locked() {
-    if (!bgft_init_once()) return false;
+    if (!install_engine_init_once()) return false;
     for (auto& q : g_queue) {
         if (q.state == QueueState::Active || q.state == QueueState::Starting || q.state == QueueState::Paused) {
             return true;
@@ -908,36 +955,49 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
 
 int main(int, char**) {
     setvbuf(stdout, nullptr, _IONBF, 0);
-    if (static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL)) < 0) return 1;
-    if (static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT)) < 0) return 2;
-    if (sceAppInstUtilInitialize() != 0) return 3;
-    if (!bgft_init_once()) return 4;
+    mkdir("/data/iNSync", 0777);
+    unlink("/data/iNSync/startup.log");
+    startup_log("stage 01: process_enter");
 
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) return 5;
-    if (!init_font()) return 6;
+    int sdl_ret = SDL_Init(SDL_INIT_VIDEO);
+    startup_log("stage 02: SDL_Init=0x%08X", sdl_ret);
+    if (sdl_ret != 0) return 5;
+
+    bool font_ok = init_font();
+    startup_log("stage 03: init_font=%d", font_ok ? 1 : 0);
 
     SDL_Window* w = SDL_CreateWindow("iNSync Companion", SDL_WINDOWPOS_UNDEFINED,
                                      SDL_WINDOWPOS_UNDEFINED, kFrameW, kFrameH, 0);
+    startup_log("stage 04: window=%p", w);
     if (!w) return 7;
+
     SDL_Renderer* renderer = SDL_CreateRenderer(w, -1, SDL_RENDERER_SOFTWARE);
+    startup_log("stage 05a: renderer=%p", renderer);
     if (!renderer) {
-        SDL_Surface* s = SDL_GetWindowSurface(w);
-        renderer = SDL_CreateSoftwareRenderer(s);
+        SDL_Surface* surface = SDL_GetWindowSurface(w);
+        startup_log("stage 05b: window_surface=%p", surface);
+        if (surface) renderer = SDL_CreateSoftwareRenderer(surface);
     }
+    startup_log("stage 05c: renderer_final=%p", renderer);
     if (!renderer) return 8;
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    refresh_games();
-
+    startup_log("stage 06: before_pad");
     int pad = init_pad();
+    startup_log("stage 07: pad=%d user=%d", pad, g_user_id);
+
     pthread_t http_thread{}, worker_thread{};
-    pthread_create(&http_thread, nullptr, http_server, nullptr);
-    pthread_create(&worker_thread, nullptr, queue_worker, nullptr);
+    int http_ret = pthread_create(&http_thread, nullptr, http_server, nullptr);
+    startup_log("stage 08: http_thread=%d", http_ret);
+    int worker_ret = pthread_create(&worker_thread, nullptr, queue_worker, nullptr);
+    startup_log("stage 09: worker_thread=%d", worker_ret);
 
     int page = 0;
     int selected = 0;
     uint32_t prev = 0;
     uint64_t last_games = 0;
+
+    startup_log("stage 10: main_loop_ready");
 
     while (g_running) {
         OrbisPadData pd{};
@@ -1026,10 +1086,14 @@ int main(int, char**) {
     SDL_DestroyWindow(w);
     SDL_Quit();
 
+    startup_log("shutdown: begin");
     if (g_bgft_ready) sceBgftServiceIntTerm();
     if (g_bgft_heap) free(g_bgft_heap);
-    sceAppInstUtilTerminate();
-    sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
-    sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
+    if (g_appinst_ready) sceAppInstUtilTerminate();
+    if (g_install_modules_loaded) {
+        sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
+        sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
+    }
+    startup_log("shutdown: complete");
     return 0;
 }

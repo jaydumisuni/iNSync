@@ -581,6 +581,21 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, source)
 
+    def test_ps4_companion_startup_is_fault_tolerant_and_logged(self):
+        source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
+        for token in (
+            'startup_log("stage 01: process_enter")',
+            'startup_log("stage 10: main_loop_ready")',
+            '"/data/iNSync/startup.log"',
+            'static bool install_engine_init_once()',
+            'if (!install_engine_init_once()) return false;',
+        ):
+            self.assertIn(token, source)
+        main_pos = source.index('int main(int, char**)')
+        loop_pos = source.index('startup_log("stage 10: main_loop_ready")', main_pos)
+        self.assertNotIn('sceAppInstUtilInitialize()', source[main_pos:loop_pos])
+        self.assertNotIn('sceBgftServiceIntInit', source[main_pos:loop_pos])
+
     def test_ps4_companion_artifact_is_bundled(self):
         pkg = ROOT / "resources" / "ps4" / "iNSync-Companion.pkg"
         self.assertTrue(pkg.is_file())
