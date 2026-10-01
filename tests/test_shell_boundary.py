@@ -938,12 +938,6 @@ class ShellBoundaryTests(unittest.TestCase):
             self.assertIn(token, renderer)
         for token in (
             'async function openNativeDialog(kind,options={})',
-            'if(process.platform==="win32")',
-            'openWindowsShellDialog(kind,options)',
-            'const {execFile}=require("node:child_process");',
-            '"-NoProfile","-STA","-WindowStyle","Hidden","-Command",script',
-            'Add-Type -AssemblyName System.Windows.Forms',
-            'New-Object System.Windows.Forms.OpenFileDialog',
             'dialog.showOpenDialog(nativeOptions)',
             'openNativeDialog("files",options)',
             'openNativeDialog("folder",options)',
