@@ -955,6 +955,66 @@ static void pill(SDL_Renderer* r, int x, int y, int w, const std::string& text, 
     draw_text(r,x+18,y+7,text,18,tc);
 }
 
+
+enum class PadGlyph {
+    Cross,
+    Circle,
+    Square,
+    Triangle,
+};
+
+static void draw_face_button(SDL_Renderer* r, int cx, int cy, PadGlyph glyph, int size=36) {
+    int radius=size/2;
+    rounded_fill(r,cx-radius,cy-radius,size,size,radius,20,29,45,245);
+    rounded_outline(r,cx-radius,cy-radius,size,size,radius,97,132,170,180);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r,218,234,248,255);
+    int m=size/4;
+    if(glyph==PadGlyph::Cross){
+        SDL_RenderDrawLine(r,cx-m,cy-m,cx+m,cy+m);
+        SDL_RenderDrawLine(r,cx+m,cy-m,cx-m,cy+m);
+        SDL_RenderDrawLine(r,cx-m+1,cy-m,cx+m+1,cy+m);
+        SDL_RenderDrawLine(r,cx+m+1,cy-m,cx-m+1,cy+m);
+    }else if(glyph==PadGlyph::Square){
+        SDL_Rect rc{cx-m,cy-m,m*2,m*2};
+        SDL_RenderDrawRect(r,&rc);
+        SDL_Rect rc2{cx-m+1,cy-m+1,m*2-2,m*2-2};
+        SDL_RenderDrawRect(r,&rc2);
+    }else if(glyph==PadGlyph::Triangle){
+        SDL_Point pts[4]={{cx,cy-m-2},{cx-m-2,cy+m},{cx+m+2,cy+m},{cx,cy-m-2}};
+        SDL_RenderDrawLines(r,pts,4);
+        SDL_Point pts2[4]={{cx,cy-m},{cx-m,cy+m-1},{cx+m,cy+m-1},{cx,cy-m}};
+        SDL_RenderDrawLines(r,pts2,4);
+    }else{
+        rounded_outline(r,cx-m-1,cy-m-1,m*2+2,m*2+2,m+1,218,234,248,255);
+    }
+}
+
+static void draw_dpad(SDL_Renderer* r, int cx, int cy, int size=38) {
+    int arm=size/3;
+    rounded_fill(r,cx-arm/2,cy-size/2,arm,size,5,32,42,59,255);
+    rounded_fill(r,cx-size/2,cy-arm/2,size,arm,5,32,42,59,255);
+    rounded_outline(r,cx-arm/2,cy-size/2,arm,size,5,101,132,165,170);
+    rounded_outline(r,cx-size/2,cy-arm/2,size,arm,5,101,132,165,170);
+    SDL_SetRenderDrawColor(r,215,231,245,255);
+    SDL_RenderDrawLine(r,cx,cy-size/2+5,cx-4,cy-size/2+11);
+    SDL_RenderDrawLine(r,cx,cy-size/2+5,cx+4,cy-size/2+11);
+    SDL_RenderDrawLine(r,cx,cy+size/2-5,cx-4,cy+size/2-11);
+    SDL_RenderDrawLine(r,cx,cy+size/2-5,cx+4,cy+size/2-11);
+}
+
+static void draw_shoulder_button(SDL_Renderer* r, int x, int y, const char* label) {
+    rounded_fill(r,x,y,66,30,10,29,40,58,250);
+    rounded_outline(r,x,y,66,30,10,103,139,177,175);
+    rounded_fill(r,x+7,y+5,52,5,2,52,69,92,220);
+    draw_text(r,x+21,y+6,label,16,SDL_Color{226,239,250,255});
+}
+
+static void draw_control_row(SDL_Renderer* r, int x, int y, PadGlyph glyph, const std::string& label) {
+    draw_face_button(r,x+19,y+19,glyph,38);
+    draw_text(r,x+52,y+5,label,19,SDL_Color{205,220,236,255});
+}
+
 static void draw_background(SDL_Renderer* r) {
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     for (int y=0;y<kFrameH;y+=4) {
@@ -1031,14 +1091,11 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
 
     glass_card(r,side_x,756,side_w,236,false);
     draw_text(r,1362,782,"CONTROLS",19,SDL_Color{113,201,255,255});
-    pill(r,1362,824,92,"UP/DN",false,false);
-    draw_text(r,1468,830,"Select",19,SDL_Color{205,220,236,255});
-    pill(r,1362,870,92,"SQUARE",false,false);
-    draw_text(r,1468,876,"Move to top",19,SDL_Color{205,220,236,255});
-    pill(r,1362,916,92,"TRI",false,false);
-    draw_text(r,1468,922,"Pause / Resume",19,SDL_Color{205,220,236,255});
-    pill(r,1640,916,92,"CIRCLE",false,false);
-    draw_text(r,1742,922,"Cancel",19,SDL_Color{205,220,236,255});
+    draw_dpad(r,1381,842,38);
+    draw_text(r,1414,829,"Select",19,SDL_Color{205,220,236,255});
+    draw_control_row(r,1362,870,PadGlyph::Square,"Move to top");
+    draw_control_row(r,1362,916,PadGlyph::Triangle,"Pause / Resume");
+    draw_control_row(r,1636,916,PadGlyph::Circle,"Cancel");
 
     pthread_mutex_lock(&g_lock);
     if (page == 0) {
@@ -1093,15 +1150,19 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
         draw_text(r,584,430,client.empty()?"A PC is requesting access":client,38,SDL_Color{245,252,255,255});
         draw_text(r,584,494,"Approve this PC to share the install queue and library.",22,SDL_Color{151,175,201,255});
         rounded_fill(r,584,568,330,76,22,24,196,226,230);
-        draw_text(r,624,588,"X   APPROVE",26,SDL_Color{2,20,30,255});
+        draw_face_button(r,626,606,PadGlyph::Cross,40);
+        draw_text(r,660,588,"APPROVE",26,SDL_Color{2,20,30,255});
         rounded_fill(r,932,568,330,76,22,35,42,60,230);
-        draw_text(r,972,588,"O   LATER",26,SDL_Color{220,233,246,255});
+        draw_face_button(r,974,606,PadGlyph::Circle,40);
+        draw_text(r,1008,588,"LATER",26,SDL_Color{220,233,246,255});
     }
     pthread_mutex_unlock(&g_lock);
 
     // Footer
-    draw_text(r,66,1030,"L1 / R1  Switch view",18,SDL_Color{112,136,163,255});
-    draw_text(r,1620,1030,"iNSync Companion  v1.02",18,SDL_Color{112,136,163,255});
+    draw_shoulder_button(r,66,1018,"L1");
+    draw_shoulder_button(r,140,1018,"R1");
+    draw_text(r,218,1024,"Switch view",18,SDL_Color{112,136,163,255});
+    draw_text(r,1620,1030,"iNSync Companion  v1.03",18,SDL_Color{112,136,163,255});
     SDL_RenderPresent(r);
 }
 

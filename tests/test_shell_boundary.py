@@ -598,11 +598,11 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertNotIn('sceAppInstUtilInitialize()', source[main_pos:loop_pos])
         self.assertNotIn('sceBgftServiceIntInit', source[main_pos:loop_pos])
 
-    def test_ps4_companion_v102_ui_and_idle_engine_contract(self):
+    def test_ps4_companion_ui_and_idle_engine_contract(self):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
         for token in (
-            'VERSION     := 1.02',
+            'VERSION     := 1.03',
         ):
             self.assertIn(token, makefile)
         for token in (
@@ -611,12 +611,41 @@ class ShellBoundaryTests(unittest.TestCase):
             '"CONNECTION"',
             '"INSTALL ENGINE"',
             '"PAIR WITH iNSync"',
-            '"iNSync Companion  v1.02"',
+            '"iNSync Companion  v1.03"',
             'if (!has_queued) return true;',
             'startup_log("http: ready")',
             'startup_log("http: bind=%d errno=%d port=%d"',
         ):
             self.assertIn(token, source)
+
+    def test_ps4_companion_uses_controller_glyphs_not_text_button_pills(self):
+        source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
+        makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("VERSION     := 1.03", makefile)
+        for token in (
+            "enum class PadGlyph",
+            "draw_face_button(",
+            "draw_dpad(",
+            "draw_shoulder_button(",
+            "PadGlyph::Square",
+            "PadGlyph::Triangle",
+            "PadGlyph::Circle",
+            "PadGlyph::Cross",
+            'draw_shoulder_button(r,66,1018,"L1")',
+            'draw_shoulder_button(r,140,1018,"R1")',
+            '"iNSync Companion  v1.03"',
+        ):
+            self.assertIn(token, source)
+        for stale in (
+            'pill(r,1362,824,92,"UP/DN"',
+            'pill(r,1362,870,92,"SQUARE"',
+            'pill(r,1362,916,92,"TRI"',
+            'pill(r,1640,916,92,"CIRCLE"',
+            '"L1 / R1  Switch view"',
+            '"X   APPROVE"',
+            '"O   LATER"',
+        ):
+            self.assertNotIn(stale, source)
 
     def test_ps4_companion_artifact_is_bundled(self):
         pkg = ROOT / "resources" / "ps4" / "iNSync-Companion.pkg"
