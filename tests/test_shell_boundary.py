@@ -587,8 +587,11 @@ class ShellBoundaryTests(unittest.TestCase):
             'sceBgftServiceDownloadPauseTask',
             'sceBgftServiceDownloadResumeTask',
             'sceBgftServiceDownloadStopTask',
-            'ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL',
-            'ORBIS_SYSMODULE_INTERNAL_BGFT',
+            'load_system_prx("libSceAppInstUtil.sprx")',
+            'load_system_prx("libSceBgft.sprx")',
+            'sceKernelGetFsSandboxRandomWord()',
+            'sceKernelLoadStartModule(path, 0, nullptr, 0, nullptr, nullptr)',
+            'sceKernelDlsym(handle, name, out)',
             '"/v1/queue/add"',
             'action == "top"',
         ):
@@ -608,12 +611,15 @@ class ShellBoundaryTests(unittest.TestCase):
         loop_pos = source.index('startup_log("stage 10: main_loop_ready")', main_pos)
         self.assertNotIn('sceAppInstUtilInitialize()', source[main_pos:loop_pos])
         self.assertNotIn('sceBgftServiceIntInit', source[main_pos:loop_pos])
+        self.assertNotIn('sceSysmoduleLoadModuleInternal(', source)
+        self.assertIn('p_sceAppInstUtilInitialize()', source)
+        self.assertIn('p_sceBgftServiceIntDebugDownloadRegisterPkg(&p, &task)', source)
 
     def test_ps4_companion_ui_and_idle_engine_contract(self):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
         for token in (
-            'VERSION     := 1.05',
+            'VERSION     := 1.06',
         ):
             self.assertIn(token, makefile)
         for token in (
@@ -622,7 +628,7 @@ class ShellBoundaryTests(unittest.TestCase):
             '"CONNECTION"',
             '"INSTALL ENGINE"',
             '"PAIR WITH iNSync"',
-            '"iNSync Companion  v1.05"',
+            '"iNSync Companion  v1.06"',
             'if (!has_queued) return true;',
             'startup_log("http: ready")',
             'startup_log("http: bind=%d errno=%d port=%d"',
@@ -632,7 +638,7 @@ class ShellBoundaryTests(unittest.TestCase):
     def test_ps4_companion_uses_controller_glyphs_not_text_button_pills(self):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("VERSION     := 1.05", makefile)
+        self.assertIn("VERSION     := 1.06", makefile)
         for token in (
             "enum class PadGlyph",
             "draw_face_button(",
@@ -644,7 +650,7 @@ class ShellBoundaryTests(unittest.TestCase):
             "PadGlyph::Cross",
             'draw_shoulder_button(r,66,1018,"L1")',
             'draw_shoulder_button(r,140,1018,"R1")',
-            '"iNSync Companion  v1.05"',
+            '"iNSync Companion  v1.06"',
         ):
             self.assertIn(token, source)
         for stale in (

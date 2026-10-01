@@ -5,6 +5,7 @@
 
 #include <SDL2/SDL.h>
 #include <proto-include.h>
+#include <orbis/libkernel.h>
 #include <orbis/AppInstUtil.h>
 #include <orbis/Pad.h>
 #include <orbis/Sysmodule.h>
@@ -64,21 +65,29 @@ struct TtgBgftTaskProgress {
     int32_t localCopyPercent;
 };
 
-extern "C" {
-int32_t sceBgftServiceIntInit(TtgBgftInitParams* params);
-int32_t sceBgftServiceIntTerm();
-int32_t sceBgftServiceDownloadStartTask(int32_t taskId);
-int32_t sceBgftServiceDownloadPauseTask(int32_t taskId);
-int32_t sceBgftServiceDownloadResumeTask(int32_t taskId);
-int32_t sceBgftServiceDownloadStopTask(int32_t taskId);
-int32_t sceBgftServiceDownloadGetProgress(int32_t taskId, TtgBgftTaskProgress* progress);
-int32_t sceBgftServiceIntDebugDownloadRegisterPkg(TtgBgftDownloadParam* params, int32_t* taskId);
-}
+using AppInstInitFn = int32_t (*)();
+using AppInstTermFn = int32_t (*)();
+using BgftInitFn = int32_t (*)(TtgBgftInitParams*);
+using BgftTermFn = int32_t (*)();
+using BgftRegisterFn = int32_t (*)(TtgBgftDownloadParam*, int32_t*);
+using BgftTaskFn = int32_t (*)(int32_t);
+using BgftProgressFn = int32_t (*)(int32_t, TtgBgftTaskProgress*);
+
+static AppInstInitFn p_sceAppInstUtilInitialize = nullptr;
+static AppInstTermFn p_sceAppInstUtilTerminate = nullptr;
+static BgftInitFn p_sceBgftServiceInit = nullptr;
+static BgftTermFn p_sceBgftServiceTerm = nullptr;
+static BgftRegisterFn p_sceBgftServiceIntDebugDownloadRegisterPkg = nullptr;
+static BgftTaskFn p_sceBgftServiceDownloadStartTask = nullptr;
+static BgftTaskFn p_sceBgftServiceDownloadPauseTask = nullptr;
+static BgftTaskFn p_sceBgftServiceDownloadResumeTask = nullptr;
+static BgftTaskFn p_sceBgftServiceDownloadStopTask = nullptr;
+static BgftProgressFn p_sceBgftServiceDownloadGetProgress = nullptr;
 
 static constexpr uint32_t kBgftDisableCdnQueryParam = 0x10000u;
 
 static constexpr int kPort = 9025;
-static constexpr const char* kVersion = "1.05";
+static constexpr const char* kVersion = "1.06";
 static constexpr const char* kTitleId = "TTGI00001";
 static constexpr size_t kBgftHeapSize = 1024 * 1024;
 static constexpr int kFrameW = 1920;
@@ -133,6 +142,8 @@ static void* g_bgft_heap = nullptr;
 static bool g_bgft_ready = false;
 static bool g_appinst_ready = false;
 static bool g_install_modules_loaded = false;
+static int32_t g_appinst_module = -1;
+static int32_t g_bgft_module = -1;
 
 static void startup_log(const char* fmt, ...) {
     mkdir("/data/iNSync", 0777);
@@ -279,6 +290,23 @@ static std::string sfo_get(const std::vector<uint8_t>& b, const char* wanted) {
     return {};
 }
 
+static int32_t load_system_prx(const char* name) {
+    const char* word = sceKernelGetFsSandboxRandomWord();
+    char path[256];
+    snprintf(path, sizeof(path), "/%s/common/lib/%s", word ? word : "system", name);
+    int32_t handle = static_cast<int32_t>(sceKernelLoadStartModule(path, 0, nullptr, 0, nullptr, nullptr));
+    startup_log("install_engine: load %s -> 0x%08X (%s)", name, handle, path);
+    return handle;
+}
+
+static bool resolve_symbol(int32_t handle, const char* name, void** out) {
+    if (!out) return false;
+    *out = nullptr;
+    int32_t ret = sceKernelDlsym(handle, name, out);
+    startup_log("install_engine: dlsym %s -> 0x%08X %p", name, ret, *out);
+    return ret == 0 && *out != nullptr;
+}
+
 static void refresh_games() {
     std::vector<GameInfo> fresh;
     DIR* d = opendir("/user/app");
@@ -320,18 +348,48 @@ static bool install_engine_init_once() {
     startup_log("install_engine: begin");
 
     if (!g_install_modules_loaded) {
-        int app_mod = static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL));
-        startup_log("install_engine: appinst_module=0x%08X", app_mod);
-        if (app_mod < 0) return false;
+        g_appinst_module = load_system_prx("libSceAppInstUtil.sprx");
+        if (g_appinst_module <= 0) return false;
+        g_bgft_module = load_system_prx("libSceBgft.sprx");
+        if (g_bgft_module <= 0) return false;
 
-        int bgft_mod = static_cast<int32_t>(sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT));
-        startup_log("install_engine: bgft_module=0x%08X", bgft_mod);
-        if (bgft_mod < 0) return false;
+        bool ok = true;
+        ok &= resolve_symbol(g_appinst_module, "sceAppInstUtilInitialize",
+                             reinterpret_cast<void**>(&p_sceAppInstUtilInitialize));
+        resolve_symbol(g_appinst_module, "sceAppInstUtilTerminate",
+                       reinterpret_cast<void**>(&p_sceAppInstUtilTerminate));
+
+        if (!resolve_symbol(g_bgft_module, "sceBgftServiceInit",
+                            reinterpret_cast<void**>(&p_sceBgftServiceInit))) {
+            ok &= resolve_symbol(g_bgft_module, "sceBgftServiceIntInit",
+                                 reinterpret_cast<void**>(&p_sceBgftServiceInit));
+        }
+        if (!resolve_symbol(g_bgft_module, "sceBgftServiceTerm",
+                            reinterpret_cast<void**>(&p_sceBgftServiceTerm))) {
+            resolve_symbol(g_bgft_module, "sceBgftServiceIntTerm",
+                           reinterpret_cast<void**>(&p_sceBgftServiceTerm));
+        }
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceIntDebugDownloadRegisterPkg",
+                             reinterpret_cast<void**>(&p_sceBgftServiceIntDebugDownloadRegisterPkg));
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceDownloadStartTask",
+                             reinterpret_cast<void**>(&p_sceBgftServiceDownloadStartTask));
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceDownloadPauseTask",
+                             reinterpret_cast<void**>(&p_sceBgftServiceDownloadPauseTask));
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceDownloadResumeTask",
+                             reinterpret_cast<void**>(&p_sceBgftServiceDownloadResumeTask));
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceDownloadStopTask",
+                             reinterpret_cast<void**>(&p_sceBgftServiceDownloadStopTask));
+        ok &= resolve_symbol(g_bgft_module, "sceBgftServiceDownloadGetProgress",
+                             reinterpret_cast<void**>(&p_sceBgftServiceDownloadGetProgress));
+        if (!ok) {
+            startup_log("install_engine: required symbol missing");
+            return false;
+        }
         g_install_modules_loaded = true;
     }
 
     if (!g_appinst_ready) {
-        int app_ret = sceAppInstUtilInitialize();
+        int app_ret = p_sceAppInstUtilInitialize ? p_sceAppInstUtilInitialize() : -1;
         startup_log("install_engine: appinst_init=0x%08X", app_ret);
         if (app_ret != 0) return false;
         g_appinst_ready = true;
@@ -348,7 +406,7 @@ static bool install_engine_init_once() {
         p.heap = g_bgft_heap;
         p.heapSize = kBgftHeapSize;
         startup_log("install_engine: before_bgft_init");
-        int ret = sceBgftServiceIntInit(&p);
+        int ret = p_sceBgftServiceInit ? p_sceBgftServiceInit(&p) : -1;
         startup_log("install_engine: bgft_init=0x%08X", ret);
         if (ret != 0) {
             free(g_bgft_heap);
@@ -396,13 +454,13 @@ static bool start_head_locked() {
         p.packageSubType = "";
         p.packageSize = static_cast<unsigned long>(q.size);
         int task = -1;
-        int ret = sceBgftServiceIntDebugDownloadRegisterPkg(&p, &task);
+        int ret = p_sceBgftServiceIntDebugDownloadRegisterPkg(&p, &task);
         if (ret != 0) {
             q.state = QueueState::Error;
             q.error = ret;
             return false;
         }
-        ret = sceBgftServiceDownloadStartTask(task);
+        ret = p_sceBgftServiceDownloadStartTask(task);
         if (ret != 0) {
             q.state = QueueState::Error;
             q.error = ret;
@@ -421,7 +479,7 @@ static void poll_bgft_locked() {
         if (q.task_id < 0) continue;
         if (q.state != QueueState::Active && q.state != QueueState::Paused && q.state != QueueState::Starting) continue;
         TtgBgftTaskProgress p{};
-        int ret = sceBgftServiceDownloadGetProgress(q.task_id, &p);
+        int ret = p_sceBgftServiceDownloadGetProgress(q.task_id, &p);
         if (ret != 0) {
             q.error = ret;
             continue;
@@ -791,13 +849,13 @@ static void handle_client(int fd) {
         }
         int ret = 0;
         if (action == "pause" && q->task_id >= 0) {
-            ret = sceBgftServiceDownloadPauseTask(q->task_id);
+            ret = p_sceBgftServiceDownloadPauseTask(q->task_id);
             if (!ret) q->state = QueueState::Paused;
         } else if (action == "resume" && q->task_id >= 0) {
-            ret = sceBgftServiceDownloadResumeTask(q->task_id);
+            ret = p_sceBgftServiceDownloadResumeTask(q->task_id);
             if (!ret) q->state = QueueState::Active;
         } else if (action == "cancel") {
-            if (q->task_id >= 0) ret = sceBgftServiceDownloadStopTask(q->task_id);
+            if (q->task_id >= 0) ret = p_sceBgftServiceDownloadStopTask(q->task_id);
             if (!ret) q->state = QueueState::Cancelled;
             start_head_locked();
         } else if (action == "top") {
@@ -1201,7 +1259,7 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
     draw_shoulder_button(r,66,1018,"L1");
     draw_shoulder_button(r,140,1018,"R1");
     draw_text(r,218,1024,"Switch view",18,SDL_Color{112,136,163,255});
-    draw_text(r,1620,1030,"iNSync Companion  v1.05",18,SDL_Color{112,136,163,255});
+    draw_text(r,1620,1030,"iNSync Companion  v1.06",18,SDL_Color{112,136,163,255});
     SDL_RenderPresent(r);
 }
 
@@ -1289,13 +1347,13 @@ int main(int, char**) {
                 QueueItem& q = g_queue[selected];
                 if (pressed & ORBIS_PAD_BUTTON_TRIANGLE) {
                     if (q.state == QueueState::Paused && q.task_id >= 0) {
-                        if (sceBgftServiceDownloadResumeTask(q.task_id) == 0) q.state = QueueState::Active;
+                        if (p_sceBgftServiceDownloadResumeTask(q.task_id) == 0) q.state = QueueState::Active;
                     } else if (q.state == QueueState::Active && q.task_id >= 0) {
-                        if (sceBgftServiceDownloadPauseTask(q.task_id) == 0) q.state = QueueState::Paused;
+                        if (p_sceBgftServiceDownloadPauseTask(q.task_id) == 0) q.state = QueueState::Paused;
                     }
                 }
                 if (pressed & ORBIS_PAD_BUTTON_CIRCLE) {
-                    if (q.task_id >= 0) sceBgftServiceDownloadStopTask(q.task_id);
+                    if (q.task_id >= 0) p_sceBgftServiceDownloadStopTask(q.task_id);
                     q.state = QueueState::Cancelled;
                     start_head_locked();
                 }
@@ -1338,13 +1396,12 @@ int main(int, char**) {
     SDL_Quit();
 
     startup_log("shutdown: begin");
-    if (g_bgft_ready) sceBgftServiceIntTerm();
+    if (g_bgft_ready && p_sceBgftServiceTerm) p_sceBgftServiceTerm();
     if (g_bgft_heap) free(g_bgft_heap);
-    if (g_appinst_ready) sceAppInstUtilTerminate();
-    if (g_install_modules_loaded) {
-        sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_BGFT);
-        sceSysmoduleUnloadModuleInternal(ORBIS_SYSMODULE_INTERNAL_APP_INST_UTIL);
-    }
+    if (g_appinst_ready && p_sceAppInstUtilTerminate) p_sceAppInstUtilTerminate();
+    int32_t unload_result = 0;
+    if (g_bgft_module > 0) sceKernelStopUnloadModule(g_bgft_module, 0, nullptr, 0, nullptr, &unload_result);
+    if (g_appinst_module > 0) sceKernelStopUnloadModule(g_appinst_module, 0, nullptr, 0, nullptr, &unload_result);
     startup_log("shutdown: complete");
     return 0;
 }
