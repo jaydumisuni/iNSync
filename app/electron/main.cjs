@@ -2,6 +2,7 @@ const {app,BrowserWindow,ipcMain,screen,dialog,clipboard,nativeImage,Tray,Menu}=
 const path=require("node:path");
 const fs=require("node:fs");
 const crypto=require("node:crypto");
+const {execFile}=require("node:child_process");
 const {SidecarBridge}=require("./sidecar.cjs");
 const manifest=require("./backend-manifest.json");
 
@@ -374,9 +375,110 @@ function rememberDialogDirectory(filePaths=[]){
   }
 }
 
+
+function windowsDialogFilter(options={}){
+  const filters=safeFilters(options);
+  const parts=[];
+  for(const filter of filters){
+    const name=String(filter.name||"Files").replace(/[|]/g," ").slice(0,80);
+    const exts=(filter.extensions||[])
+      .map(x=>String(x||"").trim().replace(/^\\*\\./,"").replace(/^\\./,""))
+      .filter(Boolean);
+    if(!exts.length)continue;
+    const pattern=exts.map(x=>"*."+x).join(";");
+    parts.push(name+" ("+pattern+")",pattern);
+  }
+  parts.push("All files (*.*)","*.*");
+  return parts.join("|");
+}
+
+function openWindowsShellDialog(kind,options={}){
+  return new Promise(resolve=>{
+    const script=[
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "[System.Windows.Forms.Application]::EnableVisualStyles()",
+      "$kind=$env:INSYNC_DIALOG_KIND",
+      "$title=$env:INSYNC_DIALOG_TITLE",
+      "$initial=$env:INSYNC_DIALOG_DEFAULT",
+      "$paths=@()",
+      "try {",
+      "  if($kind -eq 'folder'){",
+      "    $d=New-Object System.Windows.Forms.FolderBrowserDialog",
+      "    $d.Description=$title",
+      "    $d.ShowNewFolderButton=$true",
+      "    if($initial -and (Test-Path -LiteralPath $initial -PathType Container)){ $d.SelectedPath=$initial }",
+      "    $result=$d.ShowDialog()",
+      "    if($result -eq [System.Windows.Forms.DialogResult]::OK){ $paths=@($d.SelectedPath) }",
+      "  } else {",
+      "    $d=New-Object System.Windows.Forms.OpenFileDialog",
+      "    $d.Title=$title",
+      "    $d.Multiselect=($env:INSYNC_DIALOG_MULTI -eq '1')",
+      "    $d.CheckFileExists=$true",
+      "    $d.CheckPathExists=$true",
+      "    $d.RestoreDirectory=$true",
+      "    $d.Filter=$env:INSYNC_DIALOG_FILTER",
+      "    if($initial){",
+      "      if(Test-Path -LiteralPath $initial -PathType Leaf){",
+      "        $d.InitialDirectory=Split-Path -LiteralPath $initial -Parent",
+      "        $d.FileName=Split-Path -LiteralPath $initial -Leaf",
+      "      } elseif(Test-Path -LiteralPath $initial -PathType Container){",
+      "        $d.InitialDirectory=$initial",
+      "      }",
+      "    }",
+      "    $result=$d.ShowDialog()",
+      "    if($result -eq [System.Windows.Forms.DialogResult]::OK){ $paths=@($d.FileNames) }",
+      "  }",
+      "  [pscustomobject]@{ok=$true;canceled=($paths.Count -eq 0);paths=$paths;path=if($paths.Count){$paths[0]}else{''}} | ConvertTo-Json -Compress",
+      "} catch {",
+      "  [pscustomobject]@{ok=$false;canceled=$true;paths=@();path='';error=$_.Exception.Message} | ConvertTo-Json -Compress",
+      "}"
+    ].join("\\n");
+    const env={
+      ...process.env,
+      INSYNC_DIALOG_KIND:kind==="folder"?"folder":"files",
+      INSYNC_DIALOG_TITLE:String(options.title||(kind==="folder"?"Choose folder":"Choose files")).slice(0,100),
+      INSYNC_DIALOG_DEFAULT:String(options.defaultPath||lastDialogDirectory||app.getPath("home")),
+      INSYNC_DIALOG_MULTI:options.multi===false?"0":"1",
+      INSYNC_DIALOG_FILTER:windowsDialogFilter(options)
+    };
+    execFile(
+      "powershell.exe",
+      ["-NoProfile","-STA","-WindowStyle","Hidden","-Command",script],
+      {windowsHide:true,env,maxBuffer:1024*1024},
+      (error,stdout,stderr)=>{
+        const raw=String(stdout||"").trim().split(/\\r?\\n/).filter(Boolean).pop()||"";
+        try{
+          const result=JSON.parse(raw);
+          if(result&&Array.isArray(result.paths)){
+            rememberDialogDirectory(result.paths);
+            resolve({
+              ok:result.ok!==false,
+              canceled:!!result.canceled,
+              paths:result.paths.map(x=>String(x)),
+              path:String(result.path||result.paths[0]||""),
+              ...(result.error?{error:String(result.error)}:{})
+            });
+            return;
+          }
+        }catch{}
+        resolve({
+          ok:false,
+          canceled:true,
+          paths:[],
+          path:"",
+          error:String(error?.message||stderr||raw||"Windows file picker failed").trim()
+        });
+      }
+    );
+  });
+}
+
 async function openNativeDialog(kind,options={}){
   try{
     await prepareNativeDialog();
+    if(process.platform==="win32"){
+      return await openWindowsShellDialog(kind,options);
+    }
     const isFolder=kind==="folder";
     const nativeOptions={
       title:String(options.title||(isFolder?"Choose folder":"Choose files")).slice(0,100),
