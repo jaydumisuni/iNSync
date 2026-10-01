@@ -78,7 +78,7 @@ int32_t sceBgftServiceIntDebugDownloadRegisterPkg(TtgBgftDownloadParam* params, 
 static constexpr uint32_t kBgftDisableCdnQueryParam = 0x10000u;
 
 static constexpr int kPort = 9025;
-static constexpr const char* kVersion = "1.04";
+static constexpr const char* kVersion = "1.05";
 static constexpr const char* kTitleId = "TTGI00001";
 static constexpr size_t kBgftHeapSize = 1024 * 1024;
 static constexpr int kFrameW = 1920;
@@ -148,6 +148,45 @@ static void startup_log(const char* fmt, ...) {
 }
 
 static int g_user_id = -1;
+static int g_pad_handle = -1;
+static pthread_mutex_t g_input_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t g_input_pressed = 0;
+
+static void latch_pressed(uint32_t bits) {
+    if (!bits) return;
+    pthread_mutex_lock(&g_input_lock);
+    g_input_pressed |= bits;
+    pthread_mutex_unlock(&g_input_lock);
+}
+
+static uint32_t take_pressed() {
+    pthread_mutex_lock(&g_input_lock);
+    uint32_t bits = g_input_pressed;
+    g_input_pressed = 0;
+    pthread_mutex_unlock(&g_input_lock);
+    return bits;
+}
+
+static void* pad_input_thread(void*) {
+    uint32_t previous = 0;
+    bool have_previous = false;
+    startup_log("pad: input_thread_enter");
+    while (g_running) {
+        if (g_pad_handle >= 0) {
+            OrbisPadData pd{};
+            if (scePadReadState(g_pad_handle, &pd) == 0 && pd.connected) {
+                const uint32_t current = pd.buttons;
+                if (have_previous) latch_pressed(current & ~previous);
+                previous = current;
+                have_previous = true;
+            }
+        }
+        usleep(4000);
+    }
+    startup_log("pad: input_thread_exit");
+    return nullptr;
+}
+
 
 static std::string json_escape(const std::string& s) {
     std::string out;
@@ -1162,7 +1201,7 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
     draw_shoulder_button(r,66,1018,"L1");
     draw_shoulder_button(r,140,1018,"R1");
     draw_text(r,218,1024,"Switch view",18,SDL_Color{112,136,163,255});
-    draw_text(r,1620,1030,"iNSync Companion  v1.04",18,SDL_Color{112,136,163,255});
+    draw_text(r,1620,1030,"iNSync Companion  v1.05",18,SDL_Color{112,136,163,255});
     SDL_RenderPresent(r);
 }
 
@@ -1197,9 +1236,12 @@ int main(int, char**) {
 
     startup_log("stage 06: before_pad");
     int pad = init_pad();
+    g_pad_handle = pad;
     startup_log("stage 07: pad=%d user=%d", pad, g_user_id);
 
-    pthread_t http_thread{}, worker_thread{};
+    pthread_t http_thread{}, worker_thread{}, input_thread{};
+    int input_ret = pthread_create(&input_thread, nullptr, pad_input_thread, nullptr);
+    startup_log("stage 07b: input_thread=%d", input_ret);
     int http_ret = pthread_create(&http_thread, nullptr, http_server, nullptr);
     startup_log("stage 08: http_thread=%d", http_ret);
     int worker_ret = pthread_create(&worker_thread, nullptr, queue_worker, nullptr);
@@ -1207,17 +1249,12 @@ int main(int, char**) {
 
     int page = 0;
     int selected = 0;
-    uint32_t prev = 0;
     uint64_t last_games = 0;
 
     startup_log("stage 10: main_loop_ready");
 
     while (g_running) {
-        OrbisPadData pd{};
-        uint32_t buttons = 0;
-        if (pad >= 0 && scePadReadState(pad, &pd) == 0) buttons = pd.buttons;
-        uint32_t pressed = buttons & ~prev;
-        prev = buttons;
+        uint32_t pressed = take_pressed();
 
         if (pressed & ORBIS_PAD_BUTTON_R1) {
             page = 1;
@@ -1291,6 +1328,7 @@ int main(int, char**) {
     pthread_cancel(http_thread);
     pthread_join(http_thread, nullptr);
     pthread_join(worker_thread, nullptr);
+    pthread_join(input_thread, nullptr);
 
     if (pad >= 0) scePadClose(pad);
     if (g_font) FT_Done_Face(g_font);

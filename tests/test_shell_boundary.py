@@ -571,8 +571,8 @@ class ShellBoundaryTests(unittest.TestCase):
             'data-cmd="consoleCompanionInstall"',
             'data-cmd="consoleCompanionPair"',
             'data-cmd="consoleQueueAction"',
-            'Installed games',
-            'Add to install queue',
+            'Installed Games',
+            'Send to PS4',
         ):
             self.assertIn(token, renderer)
 
@@ -613,7 +613,7 @@ class ShellBoundaryTests(unittest.TestCase):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
         for token in (
-            'VERSION     := 1.04',
+            'VERSION     := 1.05',
         ):
             self.assertIn(token, makefile)
         for token in (
@@ -622,7 +622,7 @@ class ShellBoundaryTests(unittest.TestCase):
             '"CONNECTION"',
             '"INSTALL ENGINE"',
             '"PAIR WITH iNSync"',
-            '"iNSync Companion  v1.04"',
+            '"iNSync Companion  v1.05"',
             'if (!has_queued) return true;',
             'startup_log("http: ready")',
             'startup_log("http: bind=%d errno=%d port=%d"',
@@ -632,7 +632,7 @@ class ShellBoundaryTests(unittest.TestCase):
     def test_ps4_companion_uses_controller_glyphs_not_text_button_pills(self):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("VERSION     := 1.04", makefile)
+        self.assertIn("VERSION     := 1.05", makefile)
         for token in (
             "enum class PadGlyph",
             "draw_face_button(",
@@ -644,7 +644,7 @@ class ShellBoundaryTests(unittest.TestCase):
             "PadGlyph::Cross",
             'draw_shoulder_button(r,66,1018,"L1")',
             'draw_shoulder_button(r,140,1018,"R1")',
-            '"iNSync Companion  v1.04"',
+            '"iNSync Companion  v1.05"',
         ):
             self.assertIn(token, source)
         for stale in (
@@ -657,6 +657,43 @@ class ShellBoundaryTests(unittest.TestCase):
             '"O   LATER"',
         ):
             self.assertNotIn(stale, source)
+
+    def test_ps4_companion_tap_input_is_decoupled_from_render_loop(self):
+        source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
+        for token in (
+            'static void* pad_input_thread(void*)',
+            'usleep(4000);',
+            'latch_pressed(current & ~previous);',
+            'static uint32_t take_pressed()',
+            'uint32_t pressed = take_pressed();',
+            'pthread_create(&input_thread, nullptr, pad_input_thread, nullptr)',
+            'pthread_join(input_thread, nullptr);',
+        ):
+            self.assertIn(token, source)
+        main_pos = source.index('while (g_running) {', source.index('int main(int, char**)'))
+        frame = source[main_pos:source.index('render_ui(renderer, page, selected);', main_pos)]
+        self.assertNotIn('scePadReadState(pad', frame)
+
+    def test_playstation_windows_ui_is_simple_pair_send_queue_games(self):
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            '>Pair PS4<',
+            '<h3>Send PKG to PS4</h3>',
+            '>Send to PS4<',
+            '>Queue<',
+            '>Installed Games<',
+            'Choose PKG',
+        ):
+            self.assertIn(token, renderer)
+        for stale in (
+            '"GoldHEN FTP"',
+            '"RPI bootstrap"',
+            '"Console manager"',
+            '"Refresh queue"',
+            '"Refresh games"',
+            '"Add to install queue"',
+        ):
+            self.assertNotIn(stale, renderer[renderer.index('function psConsoleRender(){'):renderer.index('function consoleRender(', renderer.index('function psConsoleRender(){'))])
 
     def test_ps4_companion_artifact_is_bundled(self):
         pkg = ROOT / "resources" / "ps4" / "iNSync-Companion.pkg"
@@ -886,9 +923,11 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, backend)
 
-    def test_all_file_source_buttons_use_shared_in_app_picker(self):
+    def test_all_pc_source_buttons_use_shared_native_explorer_picker(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
-        self.assertEqual(renderer.count("window.ttg.dialog.openFiles"), 0)
+        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
+        self.assertIn('window.ttg.dialog.openFiles({title,multi,filters})', renderer)
+        self.assertIn('window.ttg.dialog.openFolder({title:title||"Choose folder"})', renderer)
         for token in (
             'choosePcFiles({title:"Choose files",multi:true})',
             'choosePcFiles({title:"Choose Android package"',
@@ -897,6 +936,13 @@ class ShellBoundaryTests(unittest.TestCase):
             'choosePcFiles({title:"Choose files for "+data.iphone.docPath',
         ):
             self.assertIn(token, renderer)
+        for token in (
+            'async function openNativeDialog(kind,options={})',
+            'dialog.showOpenDialog(nativeOptions)',
+            'openNativeDialog("files",options)',
+            'openNativeDialog("folder",options)',
+        ):
+            self.assertIn(token, main)
 
     def test_backend_timeout_and_renderer_recovery_prevent_indefinite_freeze(self):
         sidecar = (ROOT / "app" / "electron" / "sidecar.cjs").read_text(encoding="utf-8")
