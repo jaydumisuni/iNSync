@@ -744,6 +744,23 @@ def _parse_adb_devices(text: str) -> list[dict[str, Any]]:
 
 
 def adb_devices_data(job: Job | None = None) -> dict[str, Any]:
+    modern = adb_modern_path()
+    if modern:
+        cmd = _adb_modern_base() + ["devices", "-l"]
+        if job:
+            rc, out, err = run_process(job, cmd, timeout=20)
+        else:
+            rc, out, err = run_quick(cmd, timeout=20)
+        devices = _parse_adb_devices(out) if rc == 0 else []
+        return {
+            "ok": rc == 0,
+            "available": True,
+            "devices": devices,
+            "message": f"{len(devices)} ADB device(s)",
+            "error": err if rc else "",
+            "server_port": ADB_MODERN_SERVER_PORT,
+        }
+
     adb = adb_path()
     if not adb:
         return unavailable("ADB runtime is unavailable", devices=[])
@@ -752,28 +769,13 @@ def adb_devices_data(job: Job | None = None) -> dict[str, Any]:
     else:
         rc, out, err = run_quick([adb, "devices", "-l"], timeout=20)
     devices = _parse_adb_devices(out) if rc == 0 else []
-
-    modern = adb_modern_path()
-    if modern:
-        cmd = _adb_modern_base() + ["devices", "-l"]
-        if job:
-            rc2, out2, _ = run_process(job, cmd, timeout=20)
-        else:
-            rc2, out2, _ = run_quick(cmd, timeout=20)
-        if rc2 == 0:
-            known = {row["serial"] for row in devices}
-            # The isolated modern server is authoritative for network transports.
-            # Do not duplicate its USB view because 5037 remains the ecosystem USB owner.
-            for row in _parse_adb_devices(out2):
-                if ":" in row["serial"] and row["serial"] not in known:
-                    devices.append(row)
-                    known.add(row["serial"])
     return {
         "ok": rc == 0,
         "available": True,
         "devices": devices,
         "message": f"{len(devices)} ADB device(s)",
         "error": err if rc else "",
+        "server_port": 5037,
     }
 
 
@@ -783,8 +785,9 @@ def adb_devices_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 
 def _adb_prefix(serial: str) -> list[str]:
-    if serial and ":" in serial:
-        return _adb_modern_base() + ["-s", serial]
+    modern = adb_modern_path()
+    if modern:
+        return _adb_modern_base() + (["-s", serial] if serial else [])
     adb = adb_path()
     if not adb:
         raise FileNotFoundError("ADB runtime is unavailable")

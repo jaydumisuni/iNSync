@@ -541,6 +541,17 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertGreaterEqual(renderer.count('class="get mini" data-cmd="appGet"'), 2)
         self.assertIn('submit("adb.app.export",{package:pkg,serial:data.android.serial,destination},currentModule==="android"?"android":"apk")', renderer)
 
+    def test_android_usb_and_network_use_one_owned_adb_server(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        for token in (
+            'ADB_MODERN_SERVER_PORT = int(os.environ.get("INSYNC_ADB_MODERN_PORT", "5041"))',
+            'cmd = _adb_modern_base() + ["devices", "-l"]',
+            '"server_port": ADB_MODERN_SERVER_PORT',
+            'return _adb_modern_base() + (["-s", serial] if serial else [])',
+        ):
+            self.assertIn(token, backend)
+        self.assertNotIn("5037 remains the ecosystem USB owner", backend)
+
     def test_playstation_pkg_backend_prefers_insync_companion_with_bootstrap_fallbacks(self):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
