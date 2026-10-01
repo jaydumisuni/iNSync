@@ -923,11 +923,12 @@ class ShellBoundaryTests(unittest.TestCase):
         ):
             self.assertIn(token, backend)
 
-    def test_all_pc_source_buttons_use_shared_native_explorer_picker(self):
+    def test_all_pc_source_buttons_use_shared_in_app_picker(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
-        main = (ROOT / "app" / "electron" / "main.cjs").read_text(encoding="utf-8")
-        self.assertIn('window.ttg.dialog.openFiles({title,multi,filters})', renderer)
-        self.assertIn('window.ttg.dialog.openFolder({title:title||"Choose folder"})', renderer)
+        self.assertIn('return await openLocalPicker({title,multi,filters,mode:"files"});', renderer)
+        self.assertIn('openLocalPicker({title:title||"Choose folder",multi:false,filters:[],mode:"folder"})', renderer)
+        self.assertNotIn('window.ttg.dialog.openFiles', renderer)
+        self.assertNotIn('window.ttg.dialog.openFolder', renderer)
         for token in (
             'choosePcFiles({title:"Choose files",multi:true})',
             'choosePcFiles({title:"Choose Android package"',
@@ -936,13 +937,7 @@ class ShellBoundaryTests(unittest.TestCase):
             'choosePcFiles({title:"Choose files for "+data.iphone.docPath',
         ):
             self.assertIn(token, renderer)
-        for token in (
-            'async function openNativeDialog(kind,options={})',
-            'dialog.showOpenDialog(nativeOptions)',
-            'openNativeDialog("files",options)',
-            'openNativeDialog("folder",options)',
-        ):
-            self.assertIn(token, main)
+
 
     def test_backend_timeout_and_renderer_recovery_prevent_indefinite_freeze(self):
         sidecar = (ROOT / "app" / "electron" / "sidecar.cjs").read_text(encoding="utf-8")

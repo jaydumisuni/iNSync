@@ -565,24 +565,11 @@ function openLocalPicker({title="Choose files",multi=true,filters=[],mode="files
   });
 }
 async function choosePcFiles({title="Choose files",multi=true,filters=[]}={}){
-  try{
-    const result=await window.ttg.dialog.openFiles({title,multi,filters});
-    if(result?.ok===false){toast(result.error||"Could not open Windows Explorer");return []}
-    return result?.canceled?[]:(result?.paths||[]);
-  }catch(e){
-    toast(e?.message||"Could not open Windows Explorer");
-    return [];
-  }
+  return await openLocalPicker({title,multi,filters,mode:"files"});
 }
 async function choosePcFolder(title){
-  try{
-    const result=await window.ttg.dialog.openFolder({title:title||"Choose folder"});
-    if(result?.ok===false){toast(result.error||"Could not open Windows Explorer");return ""}
-    return result?.canceled?"":(result?.path||result?.paths?.[0]||"");
-  }catch(e){
-    toast(e?.message||"Could not open Windows Explorer");
-    return "";
-  }
+  const paths=await openLocalPicker({title:title||"Choose folder",multi:false,filters:[],mode:"folder"});
+  return paths[0]||"";
 }
 
 
@@ -720,22 +707,22 @@ async function command(cmd,b){
   if(cmd==="sharingToggle"){submit("sharing.toggle",{enable:state.connection!=="sending",public:$("#sharePublic")?.value||"Wi-Fi",private:$("#sharePrivate")?.value||"Ethernet"},"sharing");return}
   if(cmd==="peerRefresh"||cmd==="clipPeers"){submit("peer.list",{},currentModule,true);return}
   if(cmd==="peerApprove"){submit("peer.approve",{peer_id:b.dataset.peerId,approved:b.dataset.approved==="true"},currentModule);return}
-  if(cmd==="pcChooseFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose iNSync shared location"});if(!r.canceled){data.pc.sharedPaths=[r.path];renderModule()}return}
+  if(cmd==="pcChooseFolder"){const path=await choosePcFolder("Choose iNSync shared location");if(path){data.pc.sharedPaths=[path];renderModule()}return}
   if(cmd==="pcApply"){
     data.pc.role=$("#pcRole")?.value||"idle";data.pc.scope=$("#pcScope")?.value||"internet-only";
-    if(["internet-folders","selected-location"].includes(data.pc.scope)&&!data.pc.sharedPaths.length){const r=await window.ttg.dialog.openFolder({title:"Choose shared location"});if(r.canceled)return;data.pc.sharedPaths=[r.path]}
+    if(["internet-folders","selected-location"].includes(data.pc.scope)&&!data.pc.sharedPaths.length){const path=await choosePcFolder("Choose shared location");if(!path)return;data.pc.sharedPaths=[path]}
     if(data.pc.scope==="whole-pc"&&!confirm("Whole PC sharing is explicit. Continue with this scope?"))return;
     submit("peer.configure",{role:data.pc.role,scope:data.pc.scope,shared_paths:data.pc.sharedPaths},"pc");return;
   }
   if(cmd==="filesMode"){data.files.mode=b.dataset.mode==="receive"?"receive":"send";renderModule();if(data.files.mode==="receive"&&!data.files.peers.length)submit("peer.list",{},"files",true);return}
   if(cmd==="filesPeerRefresh"){submit("peer.list",{},"files",true);return}
   if(cmd==="filesChoose"){const paths=await choosePcFiles({title:"Choose files",multi:true});if(paths.length){data.files.sources=paths;renderModule()}return}
-  if(cmd==="filesChooseFolder"){const r=await window.ttg.dialog.openFolder({title:"Choose source folder"});if(!r.canceled){data.files.sources=[r.path];renderModule()}return}
-  if(cmd==="filesDestination"){const r=await window.ttg.dialog.openFolder({title:data.files.mode==="receive"?"Choose receive folder":"Choose local transfer destination"});if(!r.canceled){data.files.destination=r.path;renderModule()}return}
+  if(cmd==="filesChooseFolder"){const path=await choosePcFolder("Choose source folder");if(path){data.files.sources=[path];renderModule()}return}
+  if(cmd==="filesDestination"){const path=await choosePcFolder(data.files.mode==="receive"?"Choose receive folder":"Choose local transfer destination");if(path){data.files.destination=path;renderModule()}return}
   if(cmd==="filesTransfer"){syncFileTargets();if(data.files.targets.length){submit("peer.files.send",{sources:data.files.sources,targets:data.files.targets},"files");return}if(data.files.destination){submit("files.copy",{sources:data.files.sources,destination:data.files.destination},"files");return}toast("Choose an approved peer or local destination");return}
   if(cmd==="filesRemoteOpen"){data.files.remotePath=b.dataset.path||"";submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:data.files.remotePath},"files",true);return}
   if(cmd==="filesRemoteUp"){const parts=(data.files.remotePath||"").split("/").filter(Boolean);parts.pop();data.files.remotePath=parts.join("/");if(data.files.remotePeer&&data.files.remoteRoot!=="")submit("peer.files.list",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:data.files.remotePath},"files",true);return}
-  if(cmd==="filesRemoteSave"){if(!data.files.destination){const r=await window.ttg.dialog.openFolder({title:"Choose receive folder"});if(r.canceled)return;data.files.destination=r.path}submit("peer.files.pull",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:b.dataset.path||"",destination:data.files.destination},"files");return}
+  if(cmd==="filesRemoteSave"){if(!data.files.destination){const path=await choosePcFolder("Choose receive folder");if(!path)return;data.files.destination=path}submit("peer.files.pull",{peer_id:data.files.remotePeer,root_id:data.files.remoteRoot,path:b.dataset.path||"",destination:data.files.destination},"files");return}
   if(cmd==="clipboardToggle"){syncClipboardControls();const next=!state.clipboardAuto;if(next&&!data.clipboard.targets.length)data.clipboard.targets=data.clipboard.peers.filter(x=>!x.self&&x.approved!==false).map(x=>x.id);const updated=await window.ttg.stateSet({mode:"clipboard",clipboardEnabled:next,clipboardAuto:next,clipboardTargets:data.clipboard.targets,clipboardTypes:{text:data.clipboard.types.text,image:data.clipboard.types.image},clipboardDirection:data.clipboard.direction});if(updated)apply(updated);renderModule();return}
   if(cmd==="clipboardApply"){syncClipboardControls();const updated=await window.ttg.stateSet({mode:"clipboard",clipboardEnabled:state.clipboardEnabled,clipboardAuto:state.clipboardAuto,clipboardTargets:data.clipboard.targets,clipboardTypes:{text:data.clipboard.types.text,image:data.clipboard.types.image},clipboardDirection:data.clipboard.direction});if(updated)apply(updated);toast("Clipboard selection applied");renderModule();return}
   if(cmd==="clipAll"){data.clipboard.targets=data.clipboard.peers.filter(x=>!x.self&&x.approved!==false).map(x=>x.id);const updated=await window.ttg.stateSet({clipboardTargets:data.clipboard.targets});if(updated)apply(updated);renderModule();return}
