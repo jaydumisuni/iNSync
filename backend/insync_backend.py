@@ -3386,7 +3386,7 @@ def ios_ipa_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 
 PS4_FTP_PORT = int(os.environ.get("INSYNC_PS4_FTP_PORT", "2121"))
 PS4_RPI_PORT = int(os.environ.get("INSYNC_PS4_RPI_PORT", "12800"))
-PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "49560"))
+PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "9025"))
 PS4_BINLOADER_PORT = int(os.environ.get("INSYNC_PS4_BINLOADER_PORT", "9090"))
 PS4_KLOG_PORT = int(os.environ.get("INSYNC_PS4_KLOG_PORT", "3232"))
 PS4_PACKAGE_HTTP_PORT = int(os.environ.get("INSYNC_PS4_HTTP_PORT", "8337"))

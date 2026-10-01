@@ -77,7 +77,7 @@ int32_t sceBgftServiceIntDebugDownloadRegisterPkg(TtgBgftDownloadParam* params, 
 
 static constexpr uint32_t kBgftDisableCdnQueryParam = 0x10000u;
 
-static constexpr int kPort = 49560;
+static constexpr int kPort = 9025;
 static constexpr const char* kVersion = "1.0.0";
 static constexpr const char* kTitleId = "TTGI00001";
 static constexpr size_t kBgftHeapSize = 1024 * 1024;
@@ -1056,7 +1056,7 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
     pthread_mutex_unlock(&g_lock);
 
     pill(r,1515,46,160,paired?"CONNECTED":"LOCAL",paired,false);
-    pill(r,1688,46,166,"API :49560",false,true);
+    pill(r,1688,46,166,"API :9025",false,true);
 
     // Tabs
     int tab_y=146;
@@ -1162,7 +1162,7 @@ static void render_ui(SDL_Renderer* r, int page, int selected) {
     draw_shoulder_button(r,66,1018,"L1");
     draw_shoulder_button(r,140,1018,"R1");
     draw_text(r,218,1024,"Switch view",18,SDL_Color{112,136,163,255});
-    draw_text(r,1620,1030,"iNSync Companion  v1.03",18,SDL_Color{112,136,163,255});
+    draw_text(r,1620,1030,"iNSync Companion  v1.04",18,SDL_Color{112,136,163,255});
     SDL_RenderPresent(r);
 }
 

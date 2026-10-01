@@ -6,7 +6,7 @@ THETECHGUY iNSync Companion is the console-side peer for iNSync.
 
 - Title ID: `TTGI00001`
 - Content ID: `IV0000-TTGI00001_00-INSYNCCOMPANION0`
-- TCP API: `49560`
+- TCP API: `9025`
 - Pairing requires one physical Cross-button approval on the console.
 - The companion owns one shared install queue used by both the PC and PS4 UI.
 - Installed-title inventory is read-only from `/user/app` + `/user/appmeta/<TITLE_ID>/param.sfo`.

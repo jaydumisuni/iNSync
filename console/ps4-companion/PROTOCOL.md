@@ -1,6 +1,6 @@
 # iNSync Companion Protocol v1
 
-Default endpoint: `http://<ps4-ip>:49560`
+Default endpoint: `http://<ps4-ip>:9025`
 
 ## Pairing
 

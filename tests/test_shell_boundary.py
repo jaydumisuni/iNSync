@@ -545,7 +545,7 @@ class ShellBoundaryTests(unittest.TestCase):
         backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         for token in (
-            'PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "49560"))',
+            'PS4_COMPANION_PORT = int(os.environ.get("INSYNC_PS4_COMPANION_PORT", "9025"))',
             'def _bundled_ps4_companion_pkg() -> Path | None:',
             'def _ps4_companion_request(',
             'def console_companion_install_job(',
@@ -602,7 +602,7 @@ class ShellBoundaryTests(unittest.TestCase):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
         for token in (
-            'VERSION     := 1.03',
+            'VERSION     := 1.04',
         ):
             self.assertIn(token, makefile)
         for token in (
@@ -611,7 +611,7 @@ class ShellBoundaryTests(unittest.TestCase):
             '"CONNECTION"',
             '"INSTALL ENGINE"',
             '"PAIR WITH iNSync"',
-            '"iNSync Companion  v1.03"',
+            '"iNSync Companion  v1.04"',
             'if (!has_queued) return true;',
             'startup_log("http: ready")',
             'startup_log("http: bind=%d errno=%d port=%d"',
@@ -621,7 +621,7 @@ class ShellBoundaryTests(unittest.TestCase):
     def test_ps4_companion_uses_controller_glyphs_not_text_button_pills(self):
         source = (ROOT / "console" / "ps4-companion" / "src" / "main.cpp").read_text(encoding="utf-8")
         makefile = (ROOT / "console" / "ps4-companion" / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("VERSION     := 1.03", makefile)
+        self.assertIn("VERSION     := 1.04", makefile)
         for token in (
             "enum class PadGlyph",
             "draw_face_button(",
@@ -633,7 +633,7 @@ class ShellBoundaryTests(unittest.TestCase):
             "PadGlyph::Cross",
             'draw_shoulder_button(r,66,1018,"L1")',
             'draw_shoulder_button(r,140,1018,"R1")',
-            '"iNSync Companion  v1.03"',
+            '"iNSync Companion  v1.04"',
         ):
             self.assertIn(token, source)
         for stale in (
