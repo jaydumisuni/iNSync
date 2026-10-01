@@ -78,7 +78,7 @@ int32_t sceBgftServiceIntDebugDownloadRegisterPkg(TtgBgftDownloadParam* params, 
 static constexpr uint32_t kBgftDisableCdnQueryParam = 0x10000u;
 
 static constexpr int kPort = 9025;
-static constexpr const char* kVersion = "1.0.0";
+static constexpr const char* kVersion = "1.04";
 static constexpr const char* kTitleId = "TTGI00001";
 static constexpr size_t kBgftHeapSize = 1024 * 1024;
 static constexpr int kFrameW = 1920;
