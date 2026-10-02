@@ -685,7 +685,7 @@ class ShellBoundaryTests(unittest.TestCase):
         for token in (
             '>Pair PS4<',
             '<h3>Send PKG to PS4</h3>',
-            '>Send to PS4<',
+            '>Add to PS4 queue<',
             '>Queue<',
             '>Installed Games<',
             'Choose PKG',
@@ -725,6 +725,20 @@ class ShellBoundaryTests(unittest.TestCase):
             'ThreadingHTTPServer(("0.0.0.0", int(port)), _PS4PackageRequestHandler)',
         ):
             self.assertIn(token, backend)
+
+    def test_ps4_pair_refresh_picker_shadow_and_hidden_discovery(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('run_quick(["arp", "-a"], timeout=5)', backend)
+        self.assertIn('run_quick(["ipconfig"], timeout=8)', backend)
+        self.assertIn('def _ensure_adb_modern_server(serial: str = "") -> str:', backend)
+        self.assertIn('run_quick([adb, "kill-server"], timeout=20)', backend)
+        self.assertIn('_ensure_adb_modern_server(serial)', backend)
+        self.assertIn('box-shadow:none}', renderer)
+        self.assertIn('let __psLastStatusPoll=0,__psLastQueuePoll=0,__psLastGamesPoll=0;', renderer)
+        self.assertIn('data.playstation.status.companion_paired=true', renderer)
+        self.assertIn('function psPcSourceRow(path)', renderer)
+        self.assertIn('Selected on this PC and live queue state on the console.', renderer)
 
     def test_every_rendered_main_command_has_a_handler(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")

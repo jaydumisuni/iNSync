@@ -61,6 +61,7 @@ def powershell() -> str | None:
 
 
 ADB_MODERN_SERVER_PORT = int(os.environ.get("INSYNC_ADB_MODERN_PORT", "5041"))
+ADB_MODERN_SERVER_LOCK = threading.RLock()
 
 
 def _bundled_adb_path() -> str | None:
@@ -109,6 +110,55 @@ def ffmpeg_path() -> str | None:
     return shutil.which("ffmpeg")
 
 
+
+
+def _parse_adb_devices(output: str) -> list[dict[str, str]]:
+    devices = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line or line.startswith("List of devices attached") or line.startswith("*"):
+            continue
+        parts = line.split()
+        devices.append({
+            "serial": parts[0],
+            "state": parts[1] if len(parts) > 1 else "unknown",
+            "detail": " ".join(parts[2:]),
+        })
+    return devices
+
+
+def _ensure_adb_modern_server(serial: str = "") -> str:
+    adb = adb_modern_path()
+    if not adb:
+        raise FileNotFoundError("Modern ADB runtime is unavailable")
+    with ADB_MODERN_SERVER_LOCK:
+        run_quick([adb, "-P", str(ADB_MODERN_SERVER_PORT), "start-server"], timeout=20)
+        rc, out, _err = run_quick([adb, "-P", str(ADB_MODERN_SERVER_PORT), "devices", "-l"], timeout=20)
+        owned = _parse_adb_devices(out) if rc == 0 else []
+        if (not serial and owned) or (serial and any(d.get("serial") == serial for d in owned)):
+            return adb
+
+        # A default 5037 server can hold USB ownership away from iNSync's
+        # isolated v41 server. Re-home only when that server actually owns
+        # a device iNSync is trying to use.
+        rc0, out0, _err0 = run_quick([adb, "devices", "-l"], timeout=20)
+        default_devices = _parse_adb_devices(out0) if rc0 == 0 else []
+        should_rehome = bool(default_devices) and (
+            not serial or any(d.get("serial") == serial for d in default_devices)
+        )
+        if should_rehome:
+            run_quick([adb, "kill-server"], timeout=20)
+            run_quick([adb, "-P", str(ADB_MODERN_SERVER_PORT), "start-server"], timeout=20)
+            for _ in range(12):
+                rc1, out1, _err1 = run_quick(
+                    [adb, "-P", str(ADB_MODERN_SERVER_PORT), "devices", "-l"],
+                    timeout=20,
+                )
+                moved = _parse_adb_devices(out1) if rc1 == 0 else []
+                if (not serial and moved) or (serial and any(d.get("serial") == serial for d in moved)):
+                    break
+                time.sleep(0.25)
+    return adb
 
 
 def _adb_modern_base() -> list[str]:
@@ -746,6 +796,7 @@ def _parse_adb_devices(text: str) -> list[dict[str, Any]]:
 def adb_devices_data(job: Job | None = None) -> dict[str, Any]:
     modern = adb_modern_path()
     if modern:
+        _ensure_adb_modern_server()
         cmd = _adb_modern_base() + ["devices", "-l"]
         if job:
             rc, out, err = run_process(job, cmd, timeout=20)
@@ -787,6 +838,7 @@ def adb_devices_job(job: Job, engine: JobEngine) -> dict[str, Any]:
 def _adb_prefix(serial: str) -> list[str]:
     modern = adb_modern_path()
     if modern:
+        _ensure_adb_modern_server(serial)
         return _adb_modern_base() + (["-s", serial] if serial else [])
     adb = adb_path()
     if not adb:
@@ -3490,15 +3542,8 @@ def _ps4_ftp_banner(ip: str, timeout: float = 0.65) -> str:
 def _ps4_arp_candidates() -> list[str]:
     candidates: list[str] = []
     try:
-        cp = subprocess.run(
-            ["arp", "-a"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-        )
-        for match in re.finditer(r"(?m)^\s*(\d+\.\d+\.\d+\.\d+)\s+", cp.stdout or ""):
+        _rc, out, _err = run_quick(["arp", "-a"], timeout=5)
+        for match in re.finditer(r"(?m)^\s*(\d+\.\d+\.\d+\.\d+)\s+", out or ""):
             value = match.group(1)
             try:
                 addr = ipaddress.ip_address(value)
@@ -3514,15 +3559,8 @@ def _ps4_arp_candidates() -> list[str]:
 def _ps4_local_ipv4s() -> list[str]:
     values: list[str] = []
     try:
-        cp = subprocess.run(
-            ["ipconfig"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=8,
-        )
-        for value in re.findall(r"IPv4[^:]*:\s*(\d+\.\d+\.\d+\.\d+)", cp.stdout or "", flags=re.I):
+        _rc, out, _err = run_quick(["ipconfig"], timeout=8)
+        for value in re.findall(r"IPv4[^:]*:\s*(\d+\.\d+\.\d+\.\d+)", out or "", flags=re.I):
             try:
                 addr = ipaddress.ip_address(value)
                 if addr.is_private and not addr.is_loopback:

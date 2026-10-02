@@ -46,7 +46,7 @@ button,select,input{font:inherit}
 
 .file-picker-backdrop{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(1,5,12,.72);backdrop-filter:blur(18px);-webkit-app-region:no-drag}
 .file-picker-backdrop.open{display:flex}
-.file-picker{width:min(780px,96vw);height:min(630px,92vh);display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:10px;padding:15px;border-radius:24px;border:1px solid rgba(73,193,255,.28);background:linear-gradient(180deg,rgba(13,23,42,.98),rgba(5,10,21,.98));box-shadow:0 28px 90px rgba(0,0,0,.68),inset 0 0 0 1px rgba(255,255,255,.025)}
+.file-picker{width:min(780px,96vw);height:min(630px,92vh);display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;gap:10px;padding:15px;border-radius:24px;border:1px solid rgba(73,193,255,.28);background:linear-gradient(180deg,rgba(13,23,42,.98),rgba(5,10,21,.98));box-shadow:none}
 .file-picker-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.file-picker-head h3{margin:0;font-size:20px}.file-picker-head p{margin:2px 0 0;color:#92aac3;font-size:10px}
 .file-picker-close{width:36px;height:36px;border-radius:12px;border:1px solid rgba(255,92,124,.24);background:rgba(75,18,35,.5);color:#ffdce4;font-size:20px;cursor:pointer}
 .file-picker-nav{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:7px}.file-picker-nav button,.file-picker-foot button{border-radius:11px;padding:8px 11px;font-weight:700;cursor:pointer}
@@ -400,6 +400,15 @@ function psQueueRow(item){
 function psGameRow(game){
   return '<div class="row"><div><b>'+esc(game.title||game.title_id||"Unknown title")+'</b><small>'+esc((game.title_id||"")+(game.version?" | v"+game.version:""))+'</small></div>'+tag(game.category||"installed","green")+'</div>';
 }
+function psPcSourceRow(path){
+  const name=String(path||"").split(/[\\/]/).pop()||"PKG";
+  const item=(data.playstation.queue||[]).find(x=>String(x.name||"").toLowerCase()===name.toLowerCase());
+  const state=item?String(item.state||"queued").toLowerCase():"selected";
+  const pct=item?Math.max(0,Math.min(100,Number(item.percent||0))):0;
+  const stateLabel=item?(state+((state==="active"||state==="starting")?" | "+pct+"%":"")):"Selected on PC";
+  const tone=state==="completed"?"green":state==="error"?"red":"";
+  return '<div class="queue-card"><div class="queue-head"><div><b>'+esc(name)+'</b><small>'+esc(stateLabel)+'</small></div>'+tag(state,tone)+'</div>'+(item?'<div class="progress"><i style="width:'+pct+'%"></i></div>':'')+'</div>';
+}
 function psConsoleRender(){
   const d=data.playstation,status=d.status||{},q=queueJobFor("playstation");
   const paired=!!status.companion_paired,ready=!!status.companion_ready,view=d.view||"queue";
@@ -417,11 +426,13 @@ function psConsoleRender(){
     +'</div></div>';
 
   const names=d.paths.length?d.paths.map(x=>x.split(/[\\/]/).pop()):[];
+  const sourceRows=d.paths.length?d.paths.map(psPcSourceRow).join(""):'<div class="empty-state">No PKG selected from this PC.</div>';
   const source='<div class="card"><h3>Send PKG to PS4</h3>'
-    +'<div class="share-path">'+esc(names.length?names.join(" • "):"Choose one or more .pkg files from this PC")+'</div>'
+    +'<p class="muted">Selected on this PC and live queue state on the console.</p>'
+    +'<div class="rows" style="margin-top:10px">'+sourceRows+'</div>'
     +'<div class="buttonbar" style="margin-top:12px">'
     +'<button class="secondary" data-cmd="consoleBrowse" data-console="playstation" data-ext="pkg">Choose PKG'+(d.paths.length>1?"s":"")+'</button>'
-    +'<button class="primary" data-cmd="consoleInstall" data-console="playstation" '+(!paired||!d.paths.length?'disabled':'')+'>Send to PS4</button>'
+    +'<button class="primary" data-cmd="consoleInstall" data-console="playstation" '+(!paired||!d.paths.length?'disabled':'')+'>Add to PS4 queue</button>'
     +'</div>'
     +(q?jobCard(q):'')
     +'</div>';
@@ -633,7 +644,13 @@ function handleFinished(job){
   if(job.operation==="console.status"&&meta.context&&data[meta.context])data[meta.context].status=r;
   if(job.operation==="console.pkg"&&meta.context&&data[meta.context]){data[meta.context].status={...(data[meta.context].status||{}),...r};if(meta.context==="playstation"&&Array.isArray(r.items))data.playstation.queue=r.items}
   if(job.operation==="console.companion.install"){data.playstation.status={...(data.playstation.status||{}),...r};submit("console.status",{console:"playstation"},"playstation",true)}
-  if(job.operation==="console.companion.pair"){data.playstation.status={...(data.playstation.status||{}),...r};submit("console.status",{console:"playstation"},"playstation",true);if(r.paired){submit("console.companion.queue",{},"playstation",true);submit("console.companion.games",{},"playstation",true)}}
+  if(job.operation==="console.companion.pair"){
+    data.playstation.status={...(data.playstation.status||{}),...r};
+    if(r.paired){data.playstation.status.companion_ready=true;data.playstation.status.companion_paired=true}
+    if($("#backdrop").classList.contains("open"))renderModule();
+    submit("console.status",{console:"playstation"},"playstation",true);
+    if(r.paired){submit("console.companion.queue",{},"playstation",true);submit("console.companion.games",{},"playstation",true)}
+  }
   if(job.operation==="console.companion.queue")data.playstation.queue=r.items||[];
   if(job.operation==="console.companion.games")data.playstation.games=r.games||[];
   if(job.operation==="console.companion.action")data.playstation.queue=r.items||[];
@@ -807,13 +824,15 @@ $("#maxModal").onclick=()=>{const m=$("#modal");m.classList.toggle("maximized");
 $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#localPickerBackdrop").classList.contains("open"))localPickerFinish([]);else $("#backdrop").classList.remove("open")}});
-let __psLastQueuePoll=0,__psLastGamesPoll=0;
+let __psLastStatusPoll=0,__psLastQueuePoll=0,__psLastGamesPoll=0;
 setInterval(()=>{
-  if(currentModule!=="playstation"||!$("#backdrop").classList.contains("open")||!data.playstation.status?.companion_paired)return;
+  if(currentModule!=="playstation"||!$("#backdrop").classList.contains("open"))return;
   const now=Date.now();
+  if(now-__psLastStatusPoll>1600){__psLastStatusPoll=now;submit("console.status",{console:"playstation"},"playstation",true)}
+  if(!data.playstation.status?.companion_paired)return;
   if(now-__psLastQueuePoll>1800){__psLastQueuePoll=now;submit("console.companion.queue",{},"playstation",true)}
   if(data.playstation.view==="games"&&now-__psLastGamesPoll>8000){__psLastGamesPoll=now;submit("console.companion.games",{},"playstation",true)}
-},900);
+},800);
 (async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(next=>{apply(next);if($("#backdrop").classList.contains("open"))renderModule()});apply(state);await refreshEngine()})();
 </script>
 </body>
