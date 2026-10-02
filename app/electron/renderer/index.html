@@ -825,13 +825,23 @@ $("#cancelJob").onclick=()=>{if(activeJob)window.ttg.backend.cancel(activeJob)};
 $("#backdrop").onclick=e=>{if(e.target.id==="backdrop")$("#backdrop").classList.remove("open")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("#localPickerBackdrop").classList.contains("open"))localPickerFinish([]);else $("#backdrop").classList.remove("open")}});
 let __psLastStatusPoll=0,__psLastQueuePoll=0,__psLastGamesPoll=0;
+function operationBusy(operation){
+  return recentJobs.some(x=>x?.job?.operation===operation&&["queued","running"].includes(x.job.status));
+}
 setInterval(()=>{
   if(currentModule!=="playstation"||!$("#backdrop").classList.contains("open"))return;
-  const now=Date.now();
-  if(now-__psLastStatusPoll>1600){__psLastStatusPoll=now;submit("console.status",{console:"playstation"},"playstation",true)}
+  const now=Date.now(),ready=!!data.playstation.status?.companion_ready;
+  const statusEvery=ready?1600:4500;
+  if(now-__psLastStatusPoll>statusEvery&&!operationBusy("console.status")){
+    __psLastStatusPoll=now;submit("console.status",{console:"playstation"},"playstation",true)
+  }
   if(!data.playstation.status?.companion_paired)return;
-  if(now-__psLastQueuePoll>1800){__psLastQueuePoll=now;submit("console.companion.queue",{},"playstation",true)}
-  if(data.playstation.view==="games"&&now-__psLastGamesPoll>8000){__psLastGamesPoll=now;submit("console.companion.games",{},"playstation",true)}
+  if(now-__psLastQueuePoll>1800&&!operationBusy("console.companion.queue")){
+    __psLastQueuePoll=now;submit("console.companion.queue",{},"playstation",true)
+  }
+  if(data.playstation.view==="games"&&now-__psLastGamesPoll>8000&&!operationBusy("console.companion.games")){
+    __psLastGamesPoll=now;submit("console.companion.games",{},"playstation",true)
+  }
 },800);
 (async()=>{try{const s=await window.ttg.stateGet();if(s)apply(s)}catch{};window.ttg.onState(next=>{apply(next);if($("#backdrop").classList.contains("open"))renderModule()});apply(state);await refreshEngine()})();
 </script>

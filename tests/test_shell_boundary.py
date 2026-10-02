@@ -740,6 +740,26 @@ class ShellBoundaryTests(unittest.TestCase):
         self.assertIn('function psPcSourceRow(path)', renderer)
         self.assertIn('Selected on this PC and live queue state on the console.', renderer)
 
+    def test_ps4_discovery_is_companion_first_and_polling_cannot_starve_other_jobs(self):
+        backend = (ROOT / "backend" / "insync_backend.py").read_text(encoding="utf-8")
+        renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
+        for token in (
+            "def _ps4_service_present(ip: str, timeout: float = 0.18) -> bool:",
+            "_tcp_open(ip, PS4_COMPANION_PORT, timeout)",
+            "def _ps4_host_reachable(ip: str) -> bool:",
+            "if _ps4_host_reachable(candidate):",
+            'message = f"PS4 {ip} ready - iNSync Companion paired"',
+        ):
+            self.assertIn(token, backend)
+        for token in (
+            "function operationBusy(operation)",
+            '!operationBusy("console.status")',
+            'const statusEvery=ready?1600:4500;',
+            '!operationBusy("console.companion.queue")',
+            '!operationBusy("console.companion.games")',
+        ):
+            self.assertIn(token, renderer)
+
     def test_every_rendered_main_command_has_a_handler(self):
         renderer = (ROOT / "app" / "electron" / "renderer" / "index.html").read_text(encoding="utf-8")
         commands = set(re.findall(r'data-cmd=["\']([^"\']+)', renderer))

@@ -3572,22 +3572,64 @@ def _ps4_local_ipv4s() -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _ps4_service_present(ip: str, timeout: float = 0.18) -> bool:
+    # Companion must be discoverable on its own. GoldHEN FTP is a bootstrap
+    # transport, not a prerequisite for an already-installed Companion.
+    if _tcp_open(ip, PS4_COMPANION_PORT, timeout):
+        return True
+    if "GoldHEN FTP" in _ps4_ftp_banner(ip, timeout=max(timeout, 0.16)):
+        return True
+    return any(
+        _tcp_open(ip, port, timeout)
+        for port in (PS4_RPI_PORT, PS4_BINLOADER_PORT, PS4_KLOG_PORT)
+    )
+
+
+def _ps4_host_reachable(ip: str) -> bool:
+    try:
+        cmd = (
+            ["ping", "-n", "1", "-w", "350", ip]
+            if os.name == "nt"
+            else ["ping", "-c", "1", "-W", "1", ip]
+        )
+        rc, _out, _err = run_quick(cmd, timeout=3)
+        return rc == 0
+    except Exception:
+        return False
+
+
 def _ps4_discover_ip() -> str:
     global PS4_LAST_IP
     with PS4_DISCOVERY_LOCK:
-        preferred = [
-            str(os.environ.get("INSYNC_PS4_IP") or "").strip(),
-            PS4_LAST_IP,
-            _ps4_load_saved_ip(),
-            *_ps4_arp_candidates(),
-        ]
-        for candidate in dict.fromkeys(x for x in preferred if x):
-            if "GoldHEN FTP" in _ps4_ftp_banner(candidate):
+        configured = str(os.environ.get("INSYNC_PS4_IP") or "").strip()
+        saved = _ps4_load_saved_ip()
+        sticky = list(dict.fromkeys(x for x in (configured, PS4_LAST_IP, saved) if x))
+
+        # Check already-proven identities before touching generic ARP peers.
+        # Companion is first-class and does not require GoldHEN FTP.
+        for candidate in sticky:
+            if _ps4_service_present(candidate):
                 PS4_LAST_IP = candidate
                 _ps4_save_ip(candidate)
                 return candidate
 
-        # Bounded fallback: scan each private local /24 for a GoldHEN FTP banner.
+        # A previously proven PS4 may be alive with GoldHEN/Companion closed.
+        # Keep that identity so status stays cheap and truthful.
+        for candidate in sticky:
+            if _ps4_host_reachable(candidate):
+                PS4_LAST_IP = candidate
+                return candidate
+
+        # Only now inspect generic ARP peers for a moved/new PS4.
+        for candidate in _ps4_arp_candidates():
+            if candidate in sticky:
+                continue
+            if _ps4_service_present(candidate):
+                PS4_LAST_IP = candidate
+                _ps4_save_ip(candidate)
+                return candidate
+
+        # Bounded fallback: discover a PS4 exposing Companion or GoldHEN/RPI.
         networks: list[ipaddress.IPv4Network] = []
         for local_ip in _ps4_local_ipv4s():
             try:
@@ -3602,7 +3644,7 @@ def _ps4_discover_ip() -> str:
             return ""
 
         def probe(candidate: str) -> str:
-            return candidate if "GoldHEN FTP" in _ps4_ftp_banner(candidate, timeout=0.16) else ""
+            return candidate if _ps4_service_present(candidate, timeout=0.14) else ""
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=96) as pool:
             for result in pool.map(probe, hosts, chunksize=8):
@@ -3974,16 +4016,16 @@ def _ps4_status_data() -> dict[str, Any]:
             pass
     companion_pkg = _bundled_ps4_companion_pkg()
     if companion_ready and companion_paired:
-        message = f"PS4 {ip} ready — iNSync Companion paired"
+        message = f"PS4 {ip} ready - iNSync Companion paired"
         mode = "insync-companion"
     elif companion_ready:
-        message = f"PS4 {ip} ready — iNSync Companion is open; pair to control installs"
+        message = f"PS4 {ip} ready - iNSync Companion is open; pair to control installs"
         mode = "insync-companion-unpaired"
     elif rpi_ready:
-        message = f"PS4 {ip} ready — Remote Package Installer can bootstrap iNSync Companion"
+        message = f"PS4 {ip} ready - Remote Package Installer can bootstrap iNSync Companion"
         mode = "rpi-bootstrap"
     elif ftp_ready:
-        message = f"PS4 {ip} ready over GoldHEN FTP — iNSync Companion can be staged for one-time install"
+        message = f"PS4 {ip} ready over GoldHEN FTP - iNSync Companion can be staged for one-time install"
         mode = "goldhen-ftp-bootstrap"
     else:
         message = f"PS4 {ip} detected but package transport is unavailable"
